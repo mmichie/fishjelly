@@ -57,7 +57,7 @@ void Socket::writeLine(string line)
 /*--------------------------------------------------------------*/
 /*  readLine                                                    */
 /*  Notes: Casting EOF to a char is probably an unsafe operation*/
-/*  TODO: refactor this code                                    */
+/*  TODO: refactor this code, double check overflow conditions  */
 /*--------------------------------------------------------------*/
 bool Socket::readLine(string *buffer)
 {
