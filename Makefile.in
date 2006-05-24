@@ -55,7 +55,7 @@ am__installdirs = "$(DESTDIR)$(bindir)"
 binPROGRAMS_INSTALL = $(INSTALL_PROGRAM)
 PROGRAMS = $(bin_PROGRAMS)
 am_shelob_OBJECTS = webserver.$(OBJEXT) socket.$(OBJEXT) \
-	http.$(OBJEXT) filter.$(OBJEXT)
+	http.$(OBJEXT) filter.$(OBJEXT) log.$(OBJEXT)
 shelob_OBJECTS = $(am_shelob_OBJECTS)
 am__DEPENDENCIES_1 = @LIBOBJS@
 shelob_DEPENDENCIES = $(am__DEPENDENCIES_1)
@@ -63,8 +63,8 @@ DEFAULT_INCLUDES = -I. -I$(srcdir) -I.
 depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__depfiles_maybe = depfiles
 @AMDEP_TRUE@DEP_FILES = $(DEPDIR)/mktime.Po ./$(DEPDIR)/filter.Po \
-@AMDEP_TRUE@	./$(DEPDIR)/http.Po ./$(DEPDIR)/socket.Po \
-@AMDEP_TRUE@	./$(DEPDIR)/webserver.Po
+@AMDEP_TRUE@	./$(DEPDIR)/http.Po ./$(DEPDIR)/log.Po \
+@AMDEP_TRUE@	./$(DEPDIR)/socket.Po ./$(DEPDIR)/webserver.Po
 COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
 	$(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
 CCLD = $(CC)
@@ -164,7 +164,7 @@ sbindir = @sbindir@
 sharedstatedir = @sharedstatedir@
 sysconfdir = @sysconfdir@
 target_alias = @target_alias@
-shelob_SOURCES = webserver.cc socket.cc http.cc filter.cc
+shelob_SOURCES = webserver.cc socket.cc http.cc filter.cc log.cc webserv.h
 shelob_LDADD = $(LIBOBJS)
 all: config.h
 	$(MAKE) $(AM_MAKEFLAGS) all-am
@@ -257,6 +257,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/mktime.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/filter.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/http.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/log.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/socket.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/webserver.Po@am__quote@
 

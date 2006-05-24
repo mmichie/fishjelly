@@ -2,7 +2,7 @@
 #include <config.h>
 #endif
 
-#define DEBUG 0
+#define DEBUG 1
 
 #include <iostream>
 #include <string>
@@ -112,6 +112,17 @@ public:
     string addFooter(string unfiltered);
 
 
+};
+
+class Log {
+public:
+    bool openLogFile(string filename);
+    bool closeLogFile();
+    bool writeLogLine(string ip, string resource);
+
+private:
+    string makeDate();
+    ofstream logfile;
 };
 
 extern Http webserver;

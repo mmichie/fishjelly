@@ -9,10 +9,9 @@ void Http::printDate(void)
     time_t ltime;
     struct tm *today;
     ltime = time(NULL);
-    today = gmtime( &ltime );
-    //Date: Fri, 16 Jul 2004 21:31:04 GMT
+    today = gmtime(&ltime);
+    
     //Date: Fri, 16 Jul 2004 15:37:18 GMT
-
     strftime( buf, sizeof(buf), "%a, %d %b %Y %H:%M:%S GMT", today);
 
     date << "Date: " << buf << "\r\n";
@@ -192,6 +191,11 @@ void Http::sendFile(string filename, bool keep_alive, bool head_cmd)
         // cleanup
         file.close();
         //free buffer;
+
+        Log log;
+        log.openLogFile("access_log");
+        log.writeLogLine("foo", filename);
+        log.closeLogFile();
 
         if (DEBUG) 
             cout << "Done with send..." << endl;

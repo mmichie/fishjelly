@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.59)
-AC_INIT(shelob, 0.5, mmichie@daimyo.org)
+AC_INIT(shelob, 0.6, mmichie@gmail.com)
 AM_INIT_AUTOMAKE
 AC_CONFIG_SRCDIR([webserver.cc])
 AC_CONFIG_HEADER([config.h])
