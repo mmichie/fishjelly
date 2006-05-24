@@ -48,7 +48,6 @@
 
 using namespace std;
 
-
 class Message {
 
 public:
@@ -70,7 +69,6 @@ private:
     const static int NUM_CLIENTS_TO_QUEUE = 10; 
     void serverBind(int server_port);
   
-
 public:  
     int accept_fd, pid;
 
@@ -87,6 +85,7 @@ public:
 	serverBind(server_port);	
     }
 };
+
 class Http {
 
 private:
@@ -116,6 +115,3 @@ public:
 };
 
 extern Http webserver;
-
-
-

@@ -56,6 +56,8 @@ void Socket::writeLine(string line)
 
 /*--------------------------------------------------------------*/
 /*  readLine                                                    */
+/*  Notes: Casting EOF to a char is probably an unsafe operation*/
+/*  TODO: refactor this code                                    */
 /*--------------------------------------------------------------*/
 bool Socket::readLine(string *buffer)
 {
@@ -64,7 +66,7 @@ bool Socket::readLine(string *buffer)
 
     c = fgetc(socket_fp);
 
-    while ( (c != '\n') && (c != EOF) && (c != '\r') ) {
+    while ( (c != '\n') && (c != (char)EOF) && (c != '\r') ) {
         *buffer += c;
         c = fgetc(socket_fp);
     }
@@ -74,7 +76,7 @@ bool Socket::readLine(string *buffer)
 
     //    cout << &buffer << endl;
 
-    if (c == EOF)
+    if (c == (char)EOF)
         return false;
     else
         return true;
