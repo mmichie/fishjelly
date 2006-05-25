@@ -83,7 +83,7 @@ private:
     void printContentType(string type);
     void printContentLength(int size);
     void printConnectionType(bool keep_alive=false);
-    void sendFile(string filename, bool keep_alive = false, 
+    void sendFile(vector<string> tokens, bool keep_alive = false, 
                   bool head_cmd = false);
 
 public:
@@ -107,7 +107,7 @@ class Log {
 public:
     bool openLogFile(string filename);
     bool closeLogFile();
-    bool writeLogLine(string ip, string resource);
+    bool writeLogLine(string ip, string request, string resource, string http);
 
 private:
     string makeDate();

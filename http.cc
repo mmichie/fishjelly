@@ -62,7 +62,6 @@ void Tokenize(const string& str,
     }
 }
 
-
 void Http::printConnectionType(bool keep_alive)
 {
     if (keep_alive)
@@ -98,10 +97,15 @@ void Http::start(int server_port)
 }
 
 // FIXME breakup into multiple functions
-void Http::sendFile(string filename, bool keep_alive, bool head_cmd)
-{     
+void Http::sendFile(vector<string> tokens, bool keep_alive, bool head_cmd)
+{    
+    string filename = tokens[1];
     unsigned long size;
     string file_extension;
+
+    if (DEBUG) 
+        copy(tokens.begin(), tokens.end(), ostream_iterator<string>(cout, ", "));
+
 
     // Remove leading '/'
     filename = filename.substr(1,filename.size()).c_str();
@@ -188,14 +192,14 @@ void Http::sendFile(string filename, bool keep_alive, bool head_cmd)
             }
         }
 
+        Log log;
+        log.openLogFile("access_log");
+        log.writeLogLine(inet_ntoa(sock->client.sin_addr), tokens[0], tokens[1], tokens[2]);
+        log.closeLogFile();
+
         // cleanup
         file.close();
         //free buffer;
-
-        Log log;
-        log.openLogFile("access_log");
-        log.writeLogLine(inet_ntoa(sock->client.sin_addr), filename);
-        log.closeLogFile();
 
         if (DEBUG) 
             cout << "Done with send..." << endl;
@@ -209,6 +213,7 @@ void Http::sendFile(string filename, bool keep_alive, bool head_cmd)
 /* TODO Improve tokenization/parsing */
 void Http::parseHeader(string header)
 {
+
     vector<string> tokens, cleanup, cleanup2;
 
     bool keep_alive = false;
@@ -232,9 +237,16 @@ void Http::parseHeader(string header)
     if (pos != std::string::npos)
         tokens[1].erase(pos);
 
+    //TODO HACK
+    pos = tokens[2].find('\n');
+    if (pos != std::string::npos)
+        tokens[2].erase(pos);
+
     if (tokens.size() > 0) {
         if (tokens[0] == "GET") {
-            sendFile(tokens[1], keep_alive, false);
+            //sendFile(tokens[1], keep_alive, false);
+            sendFile(tokens, keep_alive, false);
+
             if (DEBUG) {
                 cout << "Get requested of " << tokens[1];
                 if (keep_alive)
@@ -243,7 +255,7 @@ void Http::parseHeader(string header)
                 cout << endl;
             }
         } else if (tokens[0] == "HEAD") {
-           sendFile(tokens[1], keep_alive, true); 
+           sendFile(tokens, keep_alive, true); 
         }
     }
 

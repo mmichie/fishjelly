@@ -51,11 +51,11 @@ string Log::makeDate()
 198.7.247.203 - - [24/May/2006:13:07:19 -0600] "GET / HTTP/1.1" 200 9669 "http://hivearchive.com/" "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.0; .NET
 CLR 1.0.3705)"
 */
-bool Log::writeLogLine(string ip, string resource) 
+bool Log::writeLogLine(string ip, string request, string resource, string http) 
 {
-
+    cout << request << resource << http;
     if (logfile.is_open()) {
-        logfile << ip << " - - " << " " << this->makeDate() << " " << resource << "\n";
+        logfile << ip << " - - " << " " << this->makeDate() << " \"" << request << " " << resource << " " << http << "\"\n";
         return true;
     } else {
         if (DEBUG)
