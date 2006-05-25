@@ -2,7 +2,6 @@
 
 string Filter::addFooter(string unfiltered)
 {
-    Message message;
     string filtered;
     unsigned int filter_index;
 

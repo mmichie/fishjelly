@@ -12,7 +12,7 @@ void Http::printDate(void)
     today = gmtime(&ltime);
     
     //Date: Fri, 16 Jul 2004 15:37:18 GMT
-    strftime( buf, sizeof(buf), "%a, %d %b %Y %H:%M:%S GMT", today);
+    strftime(buf, sizeof(buf), "%a, %d %b %Y %H:%M:%S GMT", today);
 
     date << "Date: " << buf << "\r\n";
 
@@ -194,7 +194,7 @@ void Http::sendFile(string filename, bool keep_alive, bool head_cmd)
 
         Log log;
         log.openLogFile("access_log");
-        log.writeLogLine("foo", filename);
+        log.writeLogLine(inet_ntoa(sock->client.sin_addr), filename);
         log.closeLogFile();
 
         if (DEBUG) 
@@ -273,7 +273,6 @@ void Http::sendHeader(int code, int size, string file_type, bool keep_alive)
             break;
         case 404:
             sock->writeLine("HTTP/1.0 404 NOT FOUND\r\n");
-
             break;
         default:
             cerr << "Wrong HTTP CODE!" << endl;

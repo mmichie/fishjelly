@@ -38,9 +38,11 @@ void Socket::acceptClient()
        }
      */
 
-    if (DEBUG)
-        fprintf(stdout, "Client Accepted... my pid is %d\n", getpid());      
-    socket_fp = fdopen(accept_fd, "r");        
+    if (DEBUG) {
+        fprintf(stdout, "Client accepted from %s... my pid is %d\n", inet_ntoa(client.sin_addr), getpid());
+    }
+
+    socket_fp = fdopen(accept_fd, "r"); 
 }
 
 /*--------------------------------------------------------------*/
@@ -50,7 +52,6 @@ void Socket::writeLine(string line)
 {
     if (send(accept_fd, line.data(), line.size(), 0) == -1) {
         perror("writeLine");
-        //return (-1);
     }	
 }
 

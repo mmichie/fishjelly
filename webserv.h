@@ -24,6 +24,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <netdb.h>
 
 #include <sys/types.h>
 #include <time.h>
@@ -47,18 +48,6 @@
 //#include <sys/dir.h>
 
 using namespace std;
-
-class Message {
-
-public:
-    bool isLoggedOn(string clientIP);
-    void login(string clientIP);
-    void logout();
-    void readMessage(string clientIP);
-    void sendMessage(string clientIP, string message);
-    string checkForMessages();
-    string listClients();
-};
 
 class Socket {
 
