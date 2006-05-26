@@ -27,18 +27,16 @@ int main(int argc, char *argv[])
 {
     /* Check command line */
     if (argc != 2) {
-        fprintf(stderr, "Error: You must specify which port to bind to!\n");
+        cerr << "Error: You must specify which port to bind to!" << endl;
         exit(1);
     }
 
     /* Setup signal handler */
     if (signal(SIGCHLD, reapChildren) == SIG_ERR) {
-        printf("Error setting SIGCHLD exit with error 1!\n");
+        cerr << "Error: Problem setting SIGCHLD exiting with error 1!" << endl;
         exit(1);
     }
 
     // Start the webserver with port given on commandline
     webserver.start(atoi(argv[1]));
 }
-
-

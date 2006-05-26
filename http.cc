@@ -194,6 +194,7 @@ void Http::sendFile(map<string, string> headermap, string request_line, bool kee
 
         // cleanup
         file.close();
+        delete buffer;
         //free buffer;
 
         if (DEBUG) 
