@@ -6,6 +6,7 @@
 
 #include <iostream>
 #include <string>
+#include <map>
 #include <memory>
 
 #include <algorithm>
@@ -83,7 +84,7 @@ private:
     void printContentType(string type);
     void printContentLength(int size);
     void printConnectionType(bool keep_alive=false);
-    void sendFile(vector<string> tokens, bool keep_alive = false, 
+    void sendFile(map<string, string> headermap, string request_line, bool keep_alive = false, 
                   bool head_cmd = false);
 
 public:

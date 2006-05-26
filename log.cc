@@ -14,8 +14,7 @@ bool Log::openLogFile(string filename)
             cout << "Opened log file\n";
         return true;
     } else
-        if (DEBUG)
-            cout << "Unable to open log file!\n";
+        cerr << "Error: Unable to open log file!\n";
         return false;
 }
 
@@ -58,8 +57,7 @@ bool Log::writeLogLine(string ip, string request, string resource, string http)
         logfile << ip << " - - " << " " << this->makeDate() << " \"" << request << " " << resource << " " << http << "\"\n";
         return true;
     } else {
-        if (DEBUG)
-            cout << "Unable to write to logfile\n";
+        cerr << "Unable to write to logfile\n";
         return false;
     }
 }

@@ -43,7 +43,7 @@ void Http::printContentLength(int size)
 }
 
 /* http://www.tldp.org/HOWTO/C++Programming-HOWTO-7.html#ss7.3 */
-void Tokenize(const string& str,
+void tokenize(const string& str,
         vector<string>& tokens,
         const string& delimiters = " ")
 {
@@ -97,17 +97,13 @@ void Http::start(int server_port)
 }
 
 // FIXME breakup into multiple functions
-void Http::sendFile(vector<string> tokens, bool keep_alive, bool head_cmd)
+void Http::sendFile(map<string, string> headermap, string request_line, bool keep_alive, bool head_cmd)
 {    
-    string filename = tokens[1];
+    string filename = headermap["GET"];
     unsigned long size;
     string file_extension;
 
-    if (DEBUG) 
-        copy(tokens.begin(), tokens.end(), ostream_iterator<string>(cout, ", "));
-
-
-    // Remove leading '/'
+    // Remove leading '/' from filename
     filename = filename.substr(1,filename.size()).c_str();
 
     // Default page
@@ -175,7 +171,6 @@ void Http::sendFile(vector<string> tokens, bool keep_alive, bool head_cmd)
         else
             sendHeader(200, size, "text/plain", keep_alive);
 
-
         // Something of a hack FIXME if time permits
         //	sock->writeLine(buffer);
         if (!head_cmd) {
@@ -194,7 +189,7 @@ void Http::sendFile(vector<string> tokens, bool keep_alive, bool head_cmd)
 
         Log log;
         log.openLogFile("access_log");
-        log.writeLogLine(inet_ntoa(sock->client.sin_addr), tokens[0], tokens[1], tokens[2]);
+        //log.writeLogLine(inet_ntoa(sock->client.sin_addr), tokens[0], tokens[1], tokens[2]);
         log.closeLogFile();
 
         // cleanup
@@ -214,52 +209,68 @@ void Http::sendFile(vector<string> tokens, bool keep_alive, bool head_cmd)
 void Http::parseHeader(string header)
 {
 
-    vector<string> tokens, cleanup, cleanup2;
+    string request_line;
+
+    vector<string> tokens, tokentmp;
+    map<string, string> headermap;
 
     bool keep_alive = false;
 
     unsigned int i;
     unsigned int loc, loc2;
 
-    Tokenize(header, tokens, " ");   
+    /* Seperate the client request headers by newline */
+    tokenize(header, tokens, "\n");   
+  
+/*
+    if (DEBUG) {
+        cout << "--------------------------\n";
+        copy(tokens.begin(), tokens.end(), ostream_iterator<string>(cout, "\n"));
+        cout << "--------------------------\n";
+    }
+*/
 
-    for (i = 0; i < tokens.size(); i++) {
-        //tokens[i] = tokens[i].upcase();
-        loc = tokens[i].find("keep-alive", 0);
-        if (loc != string::npos) {
-            keep_alive = true;
-            //break;
-        }
+    /* The first line of the client request is always GET, HEAD, POST, etc */
+    request_line = tokens[0];
+    tokenize(tokens[0], tokentmp, " ");
+    headermap[tokentmp[0]] = tokentmp[1];
+    
+    /* Seperate each request header with the name and value and insert into a hash map */
+    for (i = 1; i < tokens.size(); i++) {
+        tokentmp.clear();
+        tokenize(tokens[i], tokentmp, ": "); 
+        headermap[tokentmp[0]] = tokentmp[1];
     }
 
-    // Remove any trailing newlines
-    std::string::size_type pos = tokens[1].find('\n');
-    if (pos != std::string::npos)
-        tokens[1].erase(pos);
+    /* Print all pairs of the header hash map to console */
+    if (DEBUG) {
+        map<string, string>::iterator iter;
+        for(iter = headermap.begin(); iter != headermap.end(); iter++) {
+            cout << iter->first << " : " << iter->second << endl;
+        } 
+    }
+    
+    if (headermap["keep-alive"] == "true")
+        keep_alive = true;
+    else
+        keep_alive = false;
 
-    //TODO HACK
-    pos = tokens[2].find('\n');
-    if (pos != std::string::npos)
-        tokens[2].erase(pos);
-
-    if (tokens.size() > 0) {
-        if (tokens[0] == "GET") {
+    if (headermap.size() > 0) {
+        if (headermap.find("GET") != headermap.end()) {
             //sendFile(tokens[1], keep_alive, false);
-            sendFile(tokens, keep_alive, false);
+            sendFile(headermap, request_line, keep_alive, false);
 
             if (DEBUG) {
-                cout << "Get requested of " << tokens[1];
+                cout << "Get requested of " << headermap["GET"];
                 if (keep_alive)
                     cout << " with keep alive";
-
                 cout << endl;
             }
-        } else if (tokens[0] == "HEAD") {
-           sendFile(tokens, keep_alive, true); 
+        } else if (headermap.find("HEAD") != headermap.end()) {
+           sendFile(headermap, request_line, keep_alive, true); 
         }
     }
 
-    //    copy(tokens.begin(), tokens.end(), ostream_iterator<string>(cout, ", "));
 }
 
 string Http::getHeader()
