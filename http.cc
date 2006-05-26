@@ -205,7 +205,6 @@ void Http::sendFile(map<string, string> headermap, string request_line, bool kee
         parseHeader(getHeader());
 }
 
-/* TODO Improve tokenization/parsing */
 void Http::parseHeader(string header)
 {
 
@@ -222,24 +221,21 @@ void Http::parseHeader(string header)
     /* Seperate the client request headers by newline */
     tokenize(header, tokens, "\n");   
   
-/*
-    if (DEBUG) {
-        cout << "--------------------------\n";
-        copy(tokens.begin(), tokens.end(), ostream_iterator<string>(cout, "\n"));
-        cout << "--------------------------\n";
-    }
-*/
-
     /* The first line of the client request is always GET, HEAD, POST, etc */
     request_line = tokens[0];
     tokenize(tokens[0], tokentmp, " ");
     headermap[tokentmp[0]] = tokentmp[1];
     
+    string name, value;
     /* Seperate each request header with the name and value and insert into a hash map */
     for (i = 1; i < tokens.size(); i++) {
-        tokentmp.clear();
-        tokenize(tokens[i], tokentmp, ": "); 
-        headermap[tokentmp[0]] = tokentmp[1];
+        std::string::size_type pos = tokens[i].find(':');
+        if (pos != std::string::npos) {
+            name  = tokens[i].substr(0, pos);
+            value = tokens[i].substr(pos+2, tokens[i].length()-pos);
+
+            headermap[name] = value; 
+        }
     }
 
     /* Print all pairs of the header hash map to console */
@@ -249,23 +245,23 @@ void Http::parseHeader(string header)
             cout << iter->first << " : " << iter->second << endl;
         } 
     }
-    
-    if (headermap["keep-alive"] == "true")
+
+    if (headermap["Connection"] == "keep-alive")
         keep_alive = true;
     else
         keep_alive = false;
 
     if (headermap.size() > 0) {
         if (headermap.find("GET") != headermap.end()) {
-            //sendFile(tokens[1], keep_alive, false);
-            sendFile(headermap, request_line, keep_alive, false);
-
             if (DEBUG) {
                 cout << "Get requested of " << headermap["GET"];
                 if (keep_alive)
                     cout << " with keep alive";
                 cout << endl;
             }
+
+            sendFile(headermap, request_line, keep_alive, false);
+
         } else if (headermap.find("HEAD") != headermap.end()) {
            sendFile(headermap, request_line, keep_alive, true); 
         }
