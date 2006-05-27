@@ -13,9 +13,10 @@ bool Log::openLogFile(string filename)
         if (DEBUG)
             cout << "Opened log file\n";
         return true;
-    } else
+    } else {
         cerr << "Error: Unable to open log file!\n";
         return false;
+    }
 }
 
 bool Log::closeLogFile() 

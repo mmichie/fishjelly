@@ -130,14 +130,16 @@ void Http::sendFile(map<string, string> headermap, string request_line, bool kee
         file.seekg (0, ios::end);
         size = file.tellg();
 
-        char *buffer;
+        /*char *buffer;
         buffer = new char[size+1];
         if (buffer == NULL) {
             cerr << "Error allocating buffer!" << endl;
         }
+        */
 
+        string buffer;
         file.seekg(0, ios::beg);
-        file.read(buffer, size);
+        file.read(buffer.c_str(), size);
 
         if (file.gcount() != size) {
             cerr << "Error with read!" << endl;	    
@@ -194,7 +196,7 @@ void Http::sendFile(map<string, string> headermap, string request_line, bool kee
 
         // cleanup
         file.close();
-        delete [] buffer;
+        //delete [] buffer;
 
         if (DEBUG) 
             cout << "Done with send..." << endl;
