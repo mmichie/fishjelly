@@ -48,7 +48,7 @@ void Socket::acceptClient()
 }
 
 /**
- * Writes a string to the current socket
+ * Writes a string to the current socket.
 */
 void Socket::writeLine(string line)
 {
@@ -57,11 +57,11 @@ void Socket::writeLine(string line)
     }	
 }
 
-/*--------------------------------------------------------------*/
-/*  readLine                                                    */
-/*  Notes: Casting EOF to a char is probably an unsafe operation*/
-/*  TODO: refactor this code, double check overflow conditions  */
-/*--------------------------------------------------------------*/
+/**
+ *  Reads one line from socket.                                               
+ *  Notes: Casting EOF to a char is probably an unsafe operation
+ *  TODO: refactor this code, double check overflow conditions  
+ */
 bool Socket::readLine(string *buffer)
 {
     char c;
@@ -107,6 +107,7 @@ void Socket::serverBind(int server_port)
         perror("bind");
         exit(1);
     }
+
     // Listen to that socket with NUM CLIENTS possible pending connections
     if (listen(socket_fd, NUM_CLIENTS_TO_QUEUE) == -1) {
         perror("listen");
