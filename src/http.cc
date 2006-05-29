@@ -93,7 +93,9 @@ void Http::start(int server_port)
         /* Parent */
         else 
             close(sock->accept_fd);
-    }    
+    }
+
+	delete sock;
 }
 
 // FIXME breakup into multiple functions

@@ -8,6 +8,19 @@ class Client {
 
 };
 
+void controlBreak(int sigNo)
+{
+    /* Reset signal handler */
+    if (signal(SIGINT, controlBreak) == SIG_ERR) {
+        printf("Error setting SIGINT exit with error 1!\n");
+        exit(1);
+    }
+
+	cout << "Exiting program now..." << endl;
+	exit(0);
+}
+
+
 void reapChildren(int sigNo)
 {
     /* Reset signal handler */
@@ -31,9 +44,14 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    /* Setup signal handler */
+    /* Setup signal handlers */
     if (signal(SIGCHLD, reapChildren) == SIG_ERR) {
         cerr << "Error: Problem setting SIGCHLD exiting with error 1!" << endl;
+        exit(1);
+    }
+
+    if (signal(SIGINT, controlBreak) == SIG_ERR) {
+        cerr << "Error: Problem setting SIGINT exiting with error 1!" << endl;
         exit(1);
     }
 
