@@ -17,7 +17,7 @@ bool Log::openLogFile(string filename)
         return true;
 
     } else {
-        cerr << "Error: Unable to open log file!\n";
+        cerr << "Error: Unable to open log file (" << filename << ")" << endl;
         return false;
     }
 }

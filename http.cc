@@ -108,7 +108,7 @@ void Http::sendFile(map<string, string> headermap, string request_line, bool kee
 
     // Default page
     if (filename == "")
-        filename = "index.html";
+        filename = "htdocs/index.html";
 
     // Remove any trailing newlines
     std::string::size_type pos = filename.find('\n');
@@ -289,10 +289,10 @@ void Http::sendHeader(int code, int size, string file_type, bool keep_alive)
 {
     switch (code) {
         case 200:
-            sock->writeLine("HTTP/1.X 200 OK\r\n");
+            sock->writeLine("HTTP/1.1 200 OK\r\n");
             break;
         case 404:
-            sock->writeLine("HTTP/1.X 404 NOT FOUND\r\n");
+            sock->writeLine("HTTP/1.1 404 NOT FOUND\r\n");
             break;
         default:
             cerr << "Wrong HTTP CODE!" << endl;

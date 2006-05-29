@@ -45,8 +45,9 @@ int main(int argc, char *argv[])
 		cout << "Changed root to htdocs" << endl;
 	}
 */
-	if (chdir("htdocs") == -1) {
+	if (chdir("base") == -1) {
 		perror("chdir");
+		exit(1);
 	}
 	
     // Start the webserver with port given on commandline
