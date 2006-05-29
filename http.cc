@@ -108,7 +108,7 @@ void Http::sendFile(map<string, string> headermap, string request_line, bool kee
 
     // Default page
     if (filename == "")
-        filename = "index.html";
+        filename = "htdocs/index.html";
 
     // Remove any trailing newlines
     std::string::size_type pos = filename.find('\n');
@@ -188,7 +188,7 @@ void Http::sendFile(map<string, string> headermap, string request_line, bool kee
         }
 
         Log log;
-        log.openLogFile("access_log");
+        log.openLogFile("logs/access_log");
         log.writeLogLine(inet_ntoa(sock->client.sin_addr), request_line, 200, size, headermap["Referer"],
                          headermap["User-Agent"]);
         log.closeLogFile();
