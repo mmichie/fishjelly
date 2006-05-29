@@ -1,5 +1,7 @@
 #include "webserv.h"
-
+/**
+ * Closes the socket.
+ */
 void Socket::closeSocket()
 {
     if (DEBUG)
@@ -7,9 +9,9 @@ void Socket::closeSocket()
     fclose(socket_fp);
 }
 
-/*--------------------------------------------------------------*/
-/*  acceptClient                                                */
-/*--------------------------------------------------------------*/
+/**
+ * Accepts the client on the socket file descriptor.
+ */
 void Socket::acceptClient()
 {
     bool interrupted;
@@ -45,9 +47,9 @@ void Socket::acceptClient()
     socket_fp = fdopen(accept_fd, "r"); 
 }
 
-/*--------------------------------------------------------------*/
-/*  writeLine                                                   */
-/*--------------------------------------------------------------*/
+/**
+ * Writes a string to the current socket
+*/
 void Socket::writeLine(string line)
 {
     if (send(accept_fd, line.data(), line.size(), 0) == -1) {
@@ -84,10 +86,9 @@ bool Socket::readLine(string *buffer)
 }
 
 
-/*--------------------------------------------------------------*/
-/*  serverBind         Sets up and binds the socket to the      */
-/*                     correct port and does error handling.    */
-/*--------------------------------------------------------------*/
+/**
+ *  Sets up and binds the socket to the correct port.  
+ */
 void Socket::serverBind(int server_port)
 {
     // Setup the socket for Internet
