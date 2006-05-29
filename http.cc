@@ -108,7 +108,7 @@ void Http::sendFile(map<string, string> headermap, string request_line, bool kee
 
     // Default page
     if (filename == "")
-        filename = "htdocs/index.html";
+        filename = "index.html";
 
     // Remove any trailing newlines
     std::string::size_type pos = filename.find('\n');

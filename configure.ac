@@ -5,7 +5,7 @@ AC_PREREQ(2.59)
 AC_INIT(shelob, 0.6, mmichie@gmail.com)
 AM_INIT_AUTOMAKE
 AC_CONFIG_SRCDIR([webserver.cc])
-AC_CONFIG_HEADER([config.h])
+AM_CONFIG_HEADER([config.h])
 
 # Checks for programs.
 AC_PROG_CXX

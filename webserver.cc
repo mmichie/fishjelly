@@ -37,6 +37,19 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
+	//Change the root to htdocs for security
+/*	if (chroot("htdocs") == -1) {
+		perror("chroot");
+		cerr << "Could not change to htdocs" << endl;
+	} else {
+		cout << "Changed root to htdocs" << endl;
+	}
+*/
+	if (chdir("htdocs") == -1) {
+		perror("chdir");
+	}
+	
     // Start the webserver with port given on commandline
     webserver.start(atoi(argv[1]));
+
 }
