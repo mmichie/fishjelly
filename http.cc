@@ -105,10 +105,12 @@ void Http::sendFile(map<string, string> headermap, string request_line, bool kee
 
     // Remove leading '/' from filename
     filename = filename.substr(1,filename.size()).c_str();
-
+	
     // Default page
     if (filename == "")
-        filename = "htdocs/index.html";
+        filename = "index.html";
+
+	filename.insert(0, "htdocs/");
 
     // Remove any trailing newlines
     std::string::size_type pos = filename.find('\n');
