@@ -95,9 +95,7 @@ void Http::start(int server_port)
 
         /* Child */
         if (pid == 0)  {
-            //close(sockfd);
             parseHeader(getHeader());
-            //sock->closeSocket();
             exit(0);
         }
         /* Parent */

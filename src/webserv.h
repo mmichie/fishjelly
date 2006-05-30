@@ -2,7 +2,7 @@
 #include <config.h>
 #endif
 
-#define DEBUG 1
+#define DEBUG 0
 
 #include <iostream>
 #include <string>
@@ -71,8 +71,8 @@ public:
 
     // Constructor
     Socket(int server_port) {
-	//Bind the port
-	serverBind(server_port);	
+		//Bind the port
+		serverBind(server_port);	
     }
 };
 

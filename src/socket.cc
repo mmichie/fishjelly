@@ -7,6 +7,7 @@ void Socket::closeSocket()
 {
     if (DEBUG)
         cout << "Closing socket" << endl;
+
     fclose(socket_fp);
 }
 
