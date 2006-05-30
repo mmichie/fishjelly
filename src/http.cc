@@ -1,5 +1,8 @@
 #include "webserv.h"
 
+/**
+ * Writes RFC 2616 compliant date header to the client.
+ */
 void Http::printDate(void)
 {
     ostringstream date;
@@ -18,6 +21,7 @@ void Http::printDate(void)
 
     sock->writeLine(date.str());
 }
+
 
 void Http::printServer(void)
 {
@@ -42,7 +46,10 @@ void Http::printContentLength(int size)
     sock->writeLine(clbuffer.str());
 }
 
-/* http://www.tldp.org/HOWTO/C++Programming-HOWTO-7.html#ss7.3 */
+/**
+ * Break a string into a vector of tokens.
+ * Taken mostly verbatim from http://www.tldp.org/HOWTO/C++Programming-HOWTO-7.html#ss7.3 
+ */
 void tokenize(const string& str,
         vector<string>& tokens,
         const string& delimiters = " ")
@@ -70,6 +77,9 @@ void Http::printConnectionType(bool keep_alive)
         sock->writeLine("Connection: close\n");
 }
 
+/**
+ * Starts the web server, listening on server_port.
+ */
 void Http::start(int server_port)
 {	
     int pid;
@@ -274,6 +284,9 @@ void Http::parseHeader(string header)
 
 }
 
+/**
+ * Receive the client's request headers
+ */
 string Http::getHeader()
 {
     string clientBuffer;
@@ -289,6 +302,9 @@ string Http::getHeader()
     return clientBuffer;
 }
 
+/**
+ * Send HTTP headers to the client
+ */
 void Http::sendHeader(int code, int size, string file_type, bool keep_alive) 
 {
     switch (code) {

@@ -1,5 +1,8 @@
 #include "webserv.h"
 
+/** 
+ * Takes unfiltered string and appends footer before the end body tag.
+ */
 string Filter::addFooter(string unfiltered)
 {
     string filtered;

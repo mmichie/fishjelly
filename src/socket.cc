@@ -1,4 +1,5 @@
 #include "webserv.h"
+
 /**
  * Closes the socket.
  */
@@ -59,8 +60,8 @@ void Socket::writeLine(string line)
 
 /**
  *  Reads one line from socket.                                               
- *  Notes: Casting EOF to a char is probably an unsafe operation
- *  TODO: refactor this code, double check overflow conditions  
+ *  NOTE: Casting EOF to a char is probably an unsafe operation
+ *  TODO: Refactor this code, double check overflow conditions  
  */
 bool Socket::readLine(string *buffer)
 {
