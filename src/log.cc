@@ -8,6 +8,11 @@ bool Log::openLogFile(string filename)
         return true;
     }
 
+	/* TODO: Check when opening files - can an attacker redirect it (via symlinks),
+       force the opening of special file type (e.g., device files), move
+       things around to create a race condition, control its ancestors, or change
+       its contents?
+    */ 
     logfile.open(filename.c_str(), ios::out | ios::app);
     if (logfile.is_open()) { 
         if (DEBUG) {
