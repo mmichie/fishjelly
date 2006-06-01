@@ -146,6 +146,7 @@ void Http::sendFile(map<string, string> headermap, string request_line, bool kee
         buffer = new char[size+1];
         if (buffer == NULL) {
             cerr << "Error allocating buffer!" << endl;
+			return;
         }
 
         file.seekg(0, ios::beg);
@@ -155,8 +156,8 @@ void Http::sendFile(map<string, string> headermap, string request_line, bool kee
             cerr << "Error with read!" << endl;	    
         }
 
-        // Find the extension FIXME BUG
-        file_extension = filename.substr(filename.find_first_of("."), 
+        // Find the extension (assumes the extension is whatever follows the last '.')
+        file_extension = filename.substr(filename.rfind("."), 
                 filename.length());
 
         string filtered;
@@ -164,10 +165,9 @@ void Http::sendFile(map<string, string> headermap, string request_line, bool kee
             buffer[size] = 0;
             // Add the footer
             string s_buffer(buffer);
-            Filter *filter;
-            filter = new Filter();
+            Filter filter;
 
-            filtered = filter->addFooter(s_buffer);
+            filtered = filter.addFooter(s_buffer);
             size = filtered.length();
         }
 
