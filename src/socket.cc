@@ -93,9 +93,18 @@ bool Socket::readLine(string *buffer)
  */
 void Socket::serverBind(int server_port)
 {
+    int yes = 1; // for setsockopt() SO_REUSEADDR, below
+
     // Setup the socket for Internet
     if ((socket_fd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
         perror("Socket SFD");
+        exit(1);
+    }
+
+
+    // lose the pesky "address already in use" error message
+    if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1) {
+        perror("setsockopt");
         exit(1);
     }
 
@@ -104,8 +113,7 @@ void Socket::serverBind(int server_port)
     server.sin_addr.s_addr = INADDR_ANY;
 
     // Bind the socket
-    if (bind(socket_fd, (struct sockaddr *) &server, sizeof(struct sockaddr)) ==
-            -1) {
+    if (bind(socket_fd, (struct sockaddr *) &server, sizeof(struct sockaddr)) == -1) {
         perror("bind");
         exit(1);
     }
