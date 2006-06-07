@@ -101,7 +101,6 @@ void Socket::serverBind(int server_port)
         exit(1);
     }
 
-
     // lose the pesky "address already in use" error message
     if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1) {
         perror("setsockopt");
