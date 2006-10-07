@@ -1,4 +1,4 @@
-#include "webserv.h"
+#include "filter.h"
 
 /** 
  * Takes unfiltered string and appends footer before the end body tag.

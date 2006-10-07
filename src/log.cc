@@ -1,4 +1,4 @@
-#include "webserv.h"
+#include "log.h"
 
 bool Log::openLogFile(string filename) 
 {

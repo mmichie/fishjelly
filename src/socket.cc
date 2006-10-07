@@ -1,4 +1,4 @@
-#include "webserv.h"
+#include "socket.h"
 
 /**
  * Closes the socket.
