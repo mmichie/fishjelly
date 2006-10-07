@@ -1,9 +1,9 @@
-#include "global.h"
-
 #include <string>
 #include <fstream>
 #include <iostream>
 #include <sstream>
+
+#include "global.h"
 
 class Log {
 public:

@@ -1,14 +1,15 @@
 #include <cerrno>
-
-#include "global.h"
-#include <sys/socket.h>
-#include <sys/types.h>
-
-#include <netinet/in.h>
 #include <cstdio>
 #include <string>
-#include <arpa/inet.h>
 #include <iostream>
+
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+#include "global.h"
+
 
 class Socket {
 

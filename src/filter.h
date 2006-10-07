@@ -1,6 +1,7 @@
-#include "global.h"
 #include <string>
 #include <iostream>
+
+#include "global.h"
 
 class Filter {
 public:
