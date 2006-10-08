@@ -12,7 +12,6 @@ void controlBreak(int sigNo)
 	exit(0);
 }
 
-
 void reapChildren(int sigNo)
 {
     /* Reset signal handler */
@@ -39,6 +38,11 @@ int main(int argc, char *argv[])
     int c;
     static char optstring[] = "hVp:";
     opterr=0;
+
+	if (argc < 2) {
+		cerr << "Error: must specify port!" << endl;
+		exit(1);
+	}
 
 	while ((c=getopt(argc, argv, optstring)) != -1) {
 		switch(c) {

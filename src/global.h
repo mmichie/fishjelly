@@ -7,5 +7,3 @@
 #define DEBUG 0
 
 using namespace std;
-
-//extern Http webserver;

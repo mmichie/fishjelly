@@ -2,10 +2,12 @@
 #include <vector>
 
 #include "global.h"
+
+#include "token.h"
 #include "filter.h"
 #include "socket.h"
 #include "log.h"
-
+#include "mime.h"
 
 class Http {
 

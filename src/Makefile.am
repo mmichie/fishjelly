@@ -1,3 +1,3 @@
 bin_PROGRAMS = shelob
-shelob_SOURCES = webserver.cc socket.cc http.cc filter.cc log.cc webserv.h
+shelob_SOURCES = webserver.cc webserver.h socket.cc socket.h http.cc http.h filter.cc filter.h log.cc log.h mime.cc mime.h token.cc token.h
 shelob_LDADD = $(LIBOBJS)

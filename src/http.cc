@@ -46,7 +46,7 @@ void Http::printContentType(string type)
  */
 void Http::printContentLength(int size)
 { 
-	assert (size >= 0);
+	assert(size >= 0);
 	
     ostringstream clbuffer;
     clbuffer << "Content-Length: " << size << "\r\n";
@@ -67,29 +67,6 @@ void Http::printConnectionType(bool keep_alive)
         sock->writeLine("Connection: close\n");
 }
 
-
-/**
- * Break a string into a vector of tokens.
- * Taken mostly verbatim from http://www.tldp.org/HOWTO/C++Programming-HOWTO-7.html#ss7.3 
- */
-void tokenize(const string& str,
-        vector<string>& tokens,
-        const string& delimiters = " ")
-{
-    // Skip delimiters at beginning.
-    string::size_type lastPos = str.find_first_not_of(delimiters, 0);
-    // Find first "non-delimiter".
-    string::size_type pos     = str.find_first_of(delimiters, lastPos);
-
-    while (string::npos != pos || string::npos != lastPos) {
-        // Found a token, add it to the vector.
-        tokens.push_back(str.substr(lastPos, pos - lastPos));
-        // Skip delimiters.  Note the "not_of"
-        lastPos = str.find_first_not_of(delimiters, pos);
-        // Find next "non-delimiter"
-        pos = str.find_first_of(delimiters, lastPos);
-    }
-}
 
 /**
  * Starts the web server, listening on server_port.
@@ -181,8 +158,7 @@ void Http::sendFile(map<string, string> headermap, string request_line, bool kee
         }
 
         // Find the extension (assumes the extension is whatever follows the last '.')
-        file_extension = filename.substr(filename.rfind("."), 
-                filename.length());
+        file_extension = filename.substr(filename.rfind("."), filename.length());
 
         string filtered;
         if (file_extension == ".shtml" || file_extension == ".shtm") {
@@ -195,6 +171,9 @@ void Http::sendFile(map<string, string> headermap, string request_line, bool kee
             size = filtered.length();
         }
 
+		Mime mime;
+		mime.readMimeConfig("mime.types");
+		
         // Send the header TODO expand MIME configuration
         if (file_extension == ".html" || file_extension == ".htm")
             sendHeader(200, size, "text/html", keep_alive);
@@ -223,13 +202,14 @@ void Http::sendFile(map<string, string> headermap, string request_line, bool kee
             }
         }
 
+		//Todo optimize
         Log log;
         log.openLogFile("logs/access_log");
         log.writeLogLine(inet_ntoa(sock->client.sin_addr), request_line, 200, size, headermap["Referer"],
                          headermap["User-Agent"]);
         log.closeLogFile();
 
-        // cleanup
+        //cleanup
         file.close();
         delete [] buffer;
 
@@ -256,12 +236,13 @@ void Http::parseHeader(string header)
     unsigned int i;
     unsigned int loc, loc2;
 
+	Token token;
     /* Seperate the client request headers by newline */
-    tokenize(header, tokens, "\n");   
+    token.tokenize(header, tokens, "\n");   
   
     /* The first line of the client request is always GET, HEAD, POST, etc */
     request_line = tokens[0];
-    tokenize(tokens[0], tokentmp, " ");
+    token.tokenize(tokens[0], tokentmp, " ");
     headermap[tokentmp[0]] = tokentmp[1];
     
     string name, value;
