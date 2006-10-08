@@ -3,7 +3,6 @@
 bool Mime::readMimeConfig(string filename) 
 {
 	vector<string> tokens;
-	map<string, string> mimemap;
 
 	ifstream file(filename.c_str());
 	if (!file.is_open()) {
@@ -23,26 +22,23 @@ bool Mime::readMimeConfig(string filename)
 			stringstream ss(tmp_line); 
 			while (ss >> buf)
 				tokens.push_back(buf);
-		}
 
-		for (int j = tokens.size(); j > 0; j--) {
-			mimemap[tokens[j-1]] = tokens[0];
+			for (int j = tokens.size(); j > 1; j--) {
+				this->mimemap[tokens[j-1]] = tokens[0];
+			}
 		}
 	}
 
 	file.close();
-
-/*
-	map<string, string>::iterator iter;
-	for(iter = mimemap.begin(); iter != mimemap.end(); iter++) {
-		cout << iter->first << " : " << iter->second << endl;
-	} 
-*/
-
 }
 
 string Mime::getMimeFromExtension(string filename) 
 {
+	// Find the extension (assumes the extension is whatever follows the last '.')
+	string file_extension = filename.substr(filename.rfind(".")+1, filename.length());
 	
-	
+	if (this->mimemap.find(file_extension) == this->mimemap.end()) 
+	    return "text/plain";
+	else
+		return this->mimemap[file_extension];
 }

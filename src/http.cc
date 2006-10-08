@@ -171,21 +171,11 @@ void Http::sendFile(map<string, string> headermap, string request_line, bool kee
             size = filtered.length();
         }
 
+		//TODO optimize Mime to be a singleton
 		Mime mime;
 		mime.readMimeConfig("mime.types");
-		
-        // Send the header TODO expand MIME configuration
-        if (file_extension == ".html" || file_extension == ".htm")
-            sendHeader(200, size, "text/html", keep_alive);
-        else if (file_extension == ".shtml" || file_extension == ".shtm")
-            sendHeader(200, size, "text/html", keep_alive);
-        else if (file_extension == ".jpg" || file_extension == ".jpeg")
-            sendHeader(200, size, "image/jpeg", keep_alive);
-        else if (file_extension == ".tar")
-            sendHeader(200, size, "application/x-tar", keep_alive);
-        else
-            sendHeader(200, size, "text/plain", keep_alive);
-
+		sendHeader(200, size, mime.getMimeFromExtension(filename), keep_alive);
+       
         // Something of a hack FIXME if time permits
         //	sock->writeLine(buffer);
         if (!head_cmd) {

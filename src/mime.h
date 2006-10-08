@@ -11,4 +11,7 @@ class Mime {
 	public:
 		bool readMimeConfig(string filename);
 		string getMimeFromExtension(string filename);
+	private:
+		map<string, string> mimemap;
+
 };
