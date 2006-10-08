@@ -1,3 +1,6 @@
+#ifndef SHELOB_HTTP_H
+#define SHELOB_HTTP_H 1
+
 #include <map>
 #include <vector>
 
@@ -31,3 +34,5 @@ public:
 
     Socket *sock;        
 };
+
+#endif /* !SHELOB_HTTP_H */

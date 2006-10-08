@@ -27,6 +27,7 @@ void Cgi::setupEnv(map<string, string> headermap) {
 	}
 	
 	setenv("SERVER_PROTOCOL", "HTTP/1.1", 1);
+	setenv("SERVER_SOFTWARE", "SHELOB/3.14", 1);
 	
 }
 

@@ -1,3 +1,6 @@
+#ifndef SHELOB_TOKEN_H
+#define SHELOB_TOKEN_H 1
+
 #include "global.h"
 #include <string>
 #include <vector>
@@ -8,3 +11,5 @@ class Token {
 		vector<string>& tokens, 
 		const string& delimiters);
 };
+
+#endif /* !SHELOB_TOKEN_H */

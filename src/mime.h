@@ -1,3 +1,6 @@
+#ifndef SHELOB_MIME_H
+#define SHELOB_MIME_H 1
+
 #include <string>
 #include <iostream>
 #include <fstream>
@@ -15,3 +18,5 @@ class Mime {
 		map<string, string> mimemap;
 
 };
+
+#endif /* !SHELOB_MIME_H */

@@ -1,3 +1,6 @@
+#ifndef SHELOB_LOG_H
+#define SHELOB_LOG_H 1
+
 #include <string>
 #include <fstream>
 #include <iostream>
@@ -15,3 +18,6 @@ private:
     string makeDate();
     ofstream logfile;
 };
+
+#endif /* !SHELOB_LOG_H */
+

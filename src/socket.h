@@ -1,3 +1,6 @@
+#ifndef SHELOB_SOCKET_H
+#define SHELOB_SOCKET_H 1
+
 #include <cerrno>
 #include <cstdio>
 #include <string>
@@ -37,3 +40,5 @@ public:
 		serverBind(server_port);	
     }
 };
+
+#endif /* !SHELOB_SOCKET_H */

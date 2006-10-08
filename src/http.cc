@@ -138,16 +138,17 @@ void Http::sendFile(map<string, string> headermap, string request_line, bool kee
         return;
     } else { // Let's throw it down the socket
 
-	  // Find the extension (assumes the extension is whatever follows the last '.')
-      file_extension = filename.substr(filename.rfind("."), filename.length());
+		// Find the extension (assumes the extension is whatever follows the last '.')
+		file_extension = filename.substr(filename.rfind("."), filename.length());
 
 		if (file_extension == ".sh") {
 			Cgi cgi;
 			cgi.executeCGI(filename, sock->accept_fd, headermap);
-			if (!keep_alive)
+			//if (!keep_alive)
 				sock->closeSocket();
-			else
-				parseHeader(getHeader());
+			//else
+			//	parseHeader(getHeader());
+			return;
 		}
 
         // Read file

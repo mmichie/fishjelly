@@ -1,3 +1,6 @@
+#ifndef SHELOB_GLOBAL_H
+#define SHELOB_GLOBAL_H 1
+
 #include <cassert>
 
 #if HAVE_CONFIG_H
@@ -7,3 +10,5 @@
 #define DEBUG 0
 
 using namespace std;
+
+#endif /* !SHELOB_GLOBAL_H */
