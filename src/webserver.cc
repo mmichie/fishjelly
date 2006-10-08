@@ -37,12 +37,38 @@ Http webserver;
 
 int main(int argc, char *argv[])
 {
-    /* Check command line */
-    if (argc != 2) {
-        cerr << "Error: You must specify which port to bind to!" << endl;
-        exit(1);
-    }
 
+	int port;
+	
+	extern char *optarg;
+	extern int  optind, opterr;
+
+    int c;
+    static char optstring[] = "hVp:";
+    opterr=0;
+
+	while ((c=getopt(argc, argv, optstring)) != -1) {
+		switch(c) {
+			case 'h':
+				cout << "Help me Elvis, help me!" << endl;
+				return 0;
+			break;
+			case 'V':
+				cout << "Shelob Version foo" << endl;
+				return 0;
+			break;
+			case 'p':
+				port = atoi(optarg);
+				cout << "Starting on port " << port << endl;
+			break;
+			case '?':
+				cout << "Found an option that was not in optstring";
+			cout << endl;
+		}
+	}
+	if (optind < argc)
+		cout << "Left off at " << argv[optind] << endl;
+	
     /* Setup signal handlers */
     if (signal(SIGCHLD, reapChildren) == SIG_ERR) {
         cerr << "Error: Problem setting SIGCHLD exiting with error 1!" << endl;
@@ -68,6 +94,8 @@ int main(int argc, char *argv[])
 	}
 	
     // Start the webserver with port given on commandline
-    webserver.start(atoi(argv[1]));
+    webserver.start(port);
+
+	return 0;
 
 }

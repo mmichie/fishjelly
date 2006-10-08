@@ -15,6 +15,7 @@ private:
     void printContentType(string type);
     void printContentLength(int size);
     void printConnectionType(bool keep_alive=false);
+	string sanitizeFilename(string filename);
     void sendFile(map<string, string> headermap, string request_line, bool keep_alive = false, 
                   bool head_cmd = false);
 

@@ -82,6 +82,8 @@ void Http::printConnectionType(bool keep_alive)
  */
 void Http::start(int server_port)
 {	
+	assert(server_port > 0 && server_port <= 65535);
+	
     int pid;
 
     sock = new Socket(server_port);
@@ -106,13 +108,9 @@ void Http::start(int server_port)
 	delete sock;
 }
 
-// FIXME breakup into multiple functions
-void Http::sendFile(map<string, string> headermap, string request_line, bool keep_alive, bool head_cmd)
-{    
-    string filename = headermap["GET"];
-    unsigned long size;
-    string file_extension;
 
+string Http::sanitizeFilename(string filename)
+{
     // Remove leading '/' from filename
     filename = filename.substr(1,filename.size()).c_str();
 	
@@ -126,10 +124,22 @@ void Http::sendFile(map<string, string> headermap, string request_line, bool kee
     std::string::size_type pos = filename.find('\n');
     if (pos != std::string::npos)
         filename.erase(pos);
+	
+	return filename;
+
+}
+
+// FIXME breakup into multiple functions
+void Http::sendFile(map<string, string> headermap, string request_line, bool keep_alive, bool head_cmd)
+{    
+    string filename = headermap["GET"];
+    unsigned long size;
+    string file_extension;
+
+	filename = sanitizeFilename(filename);
 
     // Open file
     ifstream file(filename.c_str(), ios::in|ios::binary);
-
     // can't find file, 404 it
     if (!file.is_open()) {
         sendHeader(404, 0, "text/html", false);
@@ -212,6 +222,7 @@ void Http::sendFile(map<string, string> headermap, string request_line, bool kee
         if (DEBUG) 
             cout << "Done with send..." << endl;
     }
+
     if (!keep_alive)
         sock->closeSocket();
     else
