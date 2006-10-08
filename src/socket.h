@@ -15,12 +15,13 @@ class Socket {
 
 private:
     int socket_fd, sin_size;    
-    FILE *socket_fp;    
     struct sockaddr_in server;     
     const static int NUM_CLIENTS_TO_QUEUE = 10; 
     void serverBind(int server_port);
   
-public:  
+public: 
+    FILE *socket_fp;    
+ 
     int accept_fd, pid;
 
     struct sockaddr_in client;
