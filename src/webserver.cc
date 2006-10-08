@@ -1,12 +1,5 @@
 #include "webserver.h"
 
-
-class Client {
-
-
-
-};
-
 void controlBreak(int sigNo)
 {
     /* Reset signal handler */
@@ -62,21 +55,18 @@ int main(int argc, char *argv[])
 				cout << "Starting on port " << port << endl;
 			break;
 			case '?':
-				cout << "Found an option that was not in optstring";
-			cout << endl;
+				cerr << "Unknown option" << endl;
 		}
 	}
-	if (optind < argc)
-		cout << "Left off at " << argv[optind] << endl;
 	
     /* Setup signal handlers */
     if (signal(SIGCHLD, reapChildren) == SIG_ERR) {
-        cerr << "Error: Problem setting SIGCHLD exiting with error 1!" << endl;
+        cerr << "Error: Problem setting SIGCHLD, exiting with error 1!" << endl;
         exit(1);
     }
 
     if (signal(SIGINT, controlBreak) == SIG_ERR) {
-        cerr << "Error: Problem setting SIGINT exiting with error 1!" << endl;
+        cerr << "Error: Problem setting SIGINT, exiting with error 1!" << endl;
         exit(1);
     }
 

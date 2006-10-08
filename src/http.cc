@@ -1,7 +1,7 @@
 #include "http.h"
 
 /**
- * Writes RFC 2616 compliant date header to the client.
+ * Write a RFC 2616 compliant Date header to the client.
  */
 void Http::printDate(void)
 {
@@ -22,13 +22,18 @@ void Http::printDate(void)
     sock->writeLine(date.str());
 }
 
-
+/**
+ * Write a RFC 2616 compliant Server header to the client.
+ */
 void Http::printServer(void)
 {
     //sock->writeLine("Server: Shelob - Server for HTTP enviroment and Logging Outgoing Bits (Unix)\n");
     sock->writeLine("Server: SHELOB/0.5 (Unix)\r\n");
 }
 
+/**
+ * Write a RFC 2616 compliant ContentType header to the client.
+ */
 void Http::printContentType(string type)
 {
     ostringstream typebuffer;
@@ -36,8 +41,13 @@ void Http::printContentType(string type)
     sock->writeLine(typebuffer.str());
 }
 
+/**
+ * Write a RFC 2616 compliant ContentLength header to the client.
+ */
 void Http::printContentLength(int size)
 { 
+	assert (size >= 0);
+	
     ostringstream clbuffer;
     clbuffer << "Content-Length: " << size << "\r\n";
     if (DEBUG) {
@@ -45,6 +55,18 @@ void Http::printContentLength(int size)
     }
     sock->writeLine(clbuffer.str());
 }
+
+/**
+ * Write a RFC 2616 compliant ConnectionType header to the client.
+ */
+void Http::printConnectionType(bool keep_alive)
+{
+    if (keep_alive)
+        sock->writeLine("Connection: Keep-Alive\n");
+    else
+        sock->writeLine("Connection: close\n");
+}
+
 
 /**
  * Break a string into a vector of tokens.
@@ -67,14 +89,6 @@ void tokenize(const string& str,
         // Find next "non-delimiter"
         pos = str.find_first_of(delimiters, lastPos);
     }
-}
-
-void Http::printConnectionType(bool keep_alive)
-{
-    if (keep_alive)
-        sock->writeLine("Connection: Keep-Alive\n");
-    else
-        sock->writeLine("Connection: close\n");
 }
 
 /**

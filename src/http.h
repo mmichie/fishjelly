@@ -21,7 +21,7 @@ private:
 
 public:
     void sendHeader(int code, int size, string file_type = "text/plain", 
-		    bool keep_alive = false);
+		    		bool keep_alive = false);
     string getHeader();
     void start(int server_port);
     void parseHeader(string header);
