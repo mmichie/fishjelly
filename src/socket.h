@@ -18,9 +18,9 @@ private:
     struct sockaddr_in server;     
     const static int NUM_CLIENTS_TO_QUEUE = 10; 
     void serverBind(int server_port);
+    FILE *socket_fp;    
   
 public: 
-    FILE *socket_fp;    
  
     int accept_fd, pid;
 

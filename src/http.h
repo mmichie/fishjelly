@@ -8,6 +8,7 @@
 #include "socket.h"
 #include "log.h"
 #include "mime.h"
+#include "cgi.h"
 
 class Http {
 

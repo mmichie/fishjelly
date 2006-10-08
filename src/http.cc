@@ -6,7 +6,6 @@
 void Http::printDate(void)
 {
     ostringstream date;
-    ostringstream cdate;
 
     char buf[50];
     time_t ltime;
@@ -139,6 +138,18 @@ void Http::sendFile(map<string, string> headermap, string request_line, bool kee
         return;
     } else { // Let's throw it down the socket
 
+	  // Find the extension (assumes the extension is whatever follows the last '.')
+      file_extension = filename.substr(filename.rfind("."), filename.length());
+
+		if (file_extension == ".sh") {
+			Cgi cgi;
+			cgi.executeCGI(filename, sock->accept_fd, headermap);
+			if (!keep_alive)
+				sock->closeSocket();
+			else
+				parseHeader(getHeader());
+		}
+
         // Read file
         file.seekg (0, ios::end);
         size = file.tellg();
@@ -156,9 +167,6 @@ void Http::sendFile(map<string, string> headermap, string request_line, bool kee
         if (file.gcount() != size) {
             cerr << "Error with read!" << endl;	    
         }
-
-        // Find the extension (assumes the extension is whatever follows the last '.')
-        file_extension = filename.substr(filename.rfind("."), filename.length());
 
         string filtered;
         if (file_extension == ".shtml" || file_extension == ".shtm") {
@@ -179,6 +187,7 @@ void Http::sendFile(map<string, string> headermap, string request_line, bool kee
         // Something of a hack FIXME if time permits
         //	sock->writeLine(buffer);
         if (!head_cmd) {
+	
             if (file_extension == ".shtml" || file_extension == ".shtm") {
                 if (send(sock->accept_fd, filtered.data(), size, 0) == -1) {
                     perror("writeLine");

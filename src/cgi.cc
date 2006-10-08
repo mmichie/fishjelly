@@ -30,7 +30,7 @@ void Cgi::setupEnv(map<string, string> headermap) {
 	
 }
 
-bool Cgi::executeCGI(string filename, FILE *socket_fp, map<string, string> headermap) {
+bool Cgi::executeCGI(string filename, int accept_fd, map<string, string> headermap) {
     int pid;
 
     pid = fork();
@@ -42,13 +42,19 @@ bool Cgi::executeCGI(string filename, FILE *socket_fp, map<string, string> heade
     /* Child */
     if (pid == 0)  {
     	setupEnv(headermap);
-		//dup2(client->_file, STDOUT_FILENO);
 
-		printf("HTTP/1.1 200 OK\r\n");
+		dup2(accept_fd, STDOUT_FILENO);
+		
+		filename = filename.substr(7);
+		//printf("%s\n",filename.c_str());
+		//printf("HTTP/1.1 200 OK\r\n");
 		//http_headers_print(server_headers, stdout);
-
-		//execlp(app_name, app_name, filename, NULL);
-		//perror(program_name);
+		
+		//execlp(filename.c_str(), filename.c_str(), NULL);
+		//execlp("/bin/bash", "bash", "-c", "ls -l *", 0);
+		execlp("/Users/mmichie/code/shelob/base/htdocs/stuff.sh", filename.c_str(), 0);
+		
+		perror("CGI error");
 		exit(1);
 	}
 
