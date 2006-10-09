@@ -311,6 +311,9 @@ string Http::getHeader()
  */
 void Http::sendHeader(int code, int size, string file_type, bool keep_alive) 
 {
+	assert(code > 99 && code < 600);
+	assert(size >= 0);
+	
     switch (code) {
         case 200:
             sock->writeLine("HTTP/1.1 200 OK\r\n");
