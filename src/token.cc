@@ -22,3 +22,4 @@ void Token::tokenize(const string& str,
         pos = str.find_first_of(delimiters, lastPos);
     }
 }
+

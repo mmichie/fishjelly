@@ -3,6 +3,8 @@
 
 #include <map>
 #include <vector>
+#include <signal.h>
+#include <sys/wait.h>
 
 #include "global.h"
 
