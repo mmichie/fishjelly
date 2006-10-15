@@ -96,12 +96,13 @@ void Http::start(int server_port)
 			}
 			
 			sock->closeSocket();
+			//delete sock;
             exit(0);
         }
 
         /* Parent */
         else {
-            close(sock->accept_fd);
+			sock->closeSocket();
 		}
     }
 
@@ -206,7 +207,6 @@ bool Http::parseHeader(string header)
     bool keep_alive = false;
 
     unsigned int i;
-    unsigned int loc, loc2;
 
 	Token token;
     /* Seperate the client request headers by newline */

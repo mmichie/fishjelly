@@ -33,7 +33,7 @@ int main(int argc, char *argv[])
 	int port;
 	
 	extern char *optarg;
-	extern int  optind, opterr;
+	extern int  opterr;
 
     int c;
     static char optstring[] = "hVp:";

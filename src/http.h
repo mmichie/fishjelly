@@ -24,15 +24,17 @@ private:
     void printContentLength(int size);
     void printConnectionType(bool keep_alive=false);
 	string sanitizeFilename(string filename);
-    void sendFile(map<string, string> headermap, string request_line, bool keep_alive = false, 
-                  bool head_cmd = false);
+    void sendFile(string filename);
+	void processHeadRequest(map<string, string> headermap);
+	void processGetRequest(map<string, string> headermap, string request_line, bool keep_alive);
+
 
 public:
     void sendHeader(int code, int size, string file_type = "text/plain", 
 		    		bool keep_alive = false);
     string getHeader();
     void start(int server_port);
-    void parseHeader(string header);
+    bool parseHeader(string header);
 
     Socket *sock;        
 };
