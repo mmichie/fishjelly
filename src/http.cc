@@ -49,9 +49,7 @@ void Http::printContentLength(int size)
 	
     ostringstream clbuffer;
     clbuffer << "Content-Length: " << size << "\r\n";
-    if (DEBUG) {
-        cout << clbuffer.str() << endl;
-    }
+
     sock->writeLine(clbuffer.str());
 }
 
@@ -74,25 +72,37 @@ void Http::start(int server_port)
 {	
 	assert(server_port > 0 && server_port <= 65535);
 	
+	bool keep_alive = false;
     int pid;
-
-    sock = new Socket(server_port);
+	sock = new Socket(server_port);
 
     // Loop to handle clients
-    while(1) {
+    while (1) {
+	
         sock->acceptClient();
+
         pid = fork();
-        if (pid < 0)
-            perror("ERROR on fork");
+        if (pid < 0) {
+            perror("Fork");
+			exit(1);
+		}
 
         /* Child */
         if (pid == 0)  {
-            parseHeader(getHeader());
+	
+            keep_alive = parseHeader(getHeader());
+			while (keep_alive) {
+				keep_alive = parseHeader(getHeader());
+			}
+			
+			sock->closeSocket();
             exit(0);
         }
+
         /* Parent */
-        else 
+        else {
             close(sock->accept_fd);
+		}
     }
 
 	delete sock;
@@ -119,113 +129,75 @@ string Http::sanitizeFilename(string filename)
 
 }
 
-// FIXME breakup into multiple functions
-void Http::sendFile(map<string, string> headermap, string request_line, bool keep_alive, bool head_cmd)
+/**
+ * Sends a file down an open socket.
+ */
+void Http::sendFile(string filename)
 {    
-    string filename = headermap["GET"];
-    unsigned long size;
-    string file_extension;
-
-	filename = sanitizeFilename(filename);
-
-    // Open file
-    ifstream file(filename.c_str(), ios::in|ios::binary);
-    // can't find file, 404 it
-    if (!file.is_open()) {
-        sendHeader(404, 0, "text/html", false);
-        sock->writeLine("<html><head><title>404</title></head><body>404 not found</body></html>");
-        sock->closeSocket();
-        return;
-    } else { // Let's throw it down the socket
-
-		// Find the extension (assumes the extension is whatever follows the last '.')
-		file_extension = filename.substr(filename.rfind("."), filename.length());
-
-		if (file_extension == ".sh") {
-			Cgi cgi;
-			cgi.executeCGI(filename, sock->accept_fd, headermap);
-			//if (!keep_alive)
-				sock->closeSocket();
-			//else
-			//	parseHeader(getHeader());
-			return;
-		}
-
-        // Read file
-        file.seekg (0, ios::end);
-        size = file.tellg();
-
-        char *buffer;
-        buffer = new char[size+1];
-        if (buffer == NULL) {
-            cerr << "Error allocating buffer!" << endl;
-			return;
-        }
-
-        file.seekg(0, ios::beg);
-        file.read(buffer, size);
-
-        if (file.gcount() != size) {
-            cerr << "Error with read!" << endl;	    
-        }
-
-        string filtered;
-        if (file_extension == ".shtml" || file_extension == ".shtm") {
-            buffer[size] = 0;
-            // Add the footer
-            string s_buffer(buffer);
-            Filter filter;
-
-            filtered = filter.addFooter(s_buffer);
-            size = filtered.length();
-        }
-
-		//TODO optimize Mime to be a singleton
-		Mime mime;
-		mime.readMimeConfig("mime.types");
-		sendHeader(200, size, mime.getMimeFromExtension(filename), keep_alive);
-       
-        // Something of a hack FIXME if time permits
-        //	sock->writeLine(buffer);
-        if (!head_cmd) {
+	// Open file
+	ifstream file(filename.c_str(), ios::in|ios::binary);
 	
-            if (file_extension == ".shtml" || file_extension == ".shtm") {
-                if (send(sock->accept_fd, filtered.data(), size, 0) == -1) {
-                    perror("writeLine");
-                    //return (-1);
-                }	
-            } else {
-                if (send(sock->accept_fd, buffer, size, 0) == -1) {
-                    perror("writeLine");
-                    //return (-1);
-                }	
-            }
-        }
+	// Find the extension (assumes the extension is whatever follows the last '.')
+	string file_extension = filename.substr(filename.rfind("."), filename.length());
 
-		//Todo optimize
-        Log log;
-        log.openLogFile("logs/access_log");
-        log.writeLogLine(inet_ntoa(sock->client.sin_addr), request_line, 200, size, headermap["Referer"],
-                         headermap["User-Agent"]);
-        log.closeLogFile();
+	// Determine File Size
+	unsigned long size;
+	
+	file.seekg (0, ios::end);
+	size = file.tellg();
 
-        //cleanup
-        file.close();
-        delete [] buffer;
+	// Allocate buffer large enough to read entire file
+	char *buffer;
+	buffer = new char[size+1];
+	if (buffer == NULL) {
+		cerr << "Error allocating buffer!" << endl;
+		file.close();
+		return;
+	}
 
-        if (DEBUG) 
-            cout << "Done with send..." << endl;
-    }
+	// Go to beginning of file and read it in
+	file.seekg(0, ios::beg);
+	file.read(buffer, size);
 
-    if (!keep_alive)
-        sock->closeSocket();
-    else
-        parseHeader(getHeader());
+	if (file.gcount() != size) {
+		cerr << "Error with read!" << endl;
+		file.close();	
+		return;    
+	}
+
+	//Text manipulate contents of .shtml
+	string filtered;
+	if (file_extension == ".shtml" || file_extension == ".shtm") {
+		buffer[size] = 0;
+		// Add the footer
+		string s_buffer(buffer);
+		Filter filter;
+
+		filtered = filter.addFooter(s_buffer);
+		size = filtered.length();
+	}
+
+	// Something of a hack FIXME if time permits
+	//	sock->writeLine(buffer);
+	if (file_extension == ".shtml" || file_extension == ".shtm") {
+		if (send(sock->accept_fd, filtered.data(), size, 0) == -1) {
+			perror("writeLine");
+				//return (-1);
+		}	
+	} else {
+		if (send(sock->accept_fd, buffer, size, 0) == -1) {
+			perror("writeLine");
+				//return (-1);
+		}	
+	}
+
+	//cleanup
+	file.close();
+	delete [] buffer;
 }
 
-void Http::parseHeader(string header)
+bool Http::parseHeader(string header)
 {
-
     string request_line;
 
     vector<string> tokens, tokentmp;
@@ -270,22 +242,77 @@ void Http::parseHeader(string header)
     else
         keep_alive = false;
 
-    if (headermap.size() > 0) {
-        if (headermap.find("GET") != headermap.end()) {
-            if (DEBUG) {
-                cout << "Get requested of " << headermap["GET"];
-                if (keep_alive)
-                    cout << " with keep alive";
-                cout << endl;
-            }
+    if (headermap.size() <= 0) {
+		return false;
+	}
+	
+	if (headermap.find("GET") != headermap.end()) {
+		processGetRequest(headermap, request_line, keep_alive);	
+	} else if (headermap.find("HEAD") != headermap.end()) { 
+		processHeadRequest(headermap);
+	}
+	
+	return keep_alive;
+}
 
-            sendFile(headermap, request_line, keep_alive, false);
+void Http::processHeadRequest(map<string, string> headermap)
+{
+	sock->writeLine("HAR HAR !\n");
+	
+}
 
-        } else if (headermap.find("HEAD") != headermap.end()) {
-           sendFile(headermap, request_line, keep_alive, true); 
-        }
-    }
+void Http::processGetRequest(map<string, string> headermap, string request_line, bool keep_alive)
+{
+	string filename = headermap["GET"];
+	string file_extension;
 
+	filename = sanitizeFilename(filename);
+
+	// Open file
+	ifstream file(filename.c_str(), ios::in|ios::binary);
+	
+	// Find the extension (assumes the extension is whatever follows the last '.')
+	file_extension = filename.substr(filename.rfind("."), filename.length());
+
+	// can't find file, 404 it
+	if (!file.is_open()) {
+		sendHeader(404, 0, "text/html", false);
+		sock->writeLine("<html><head><title>404</title></head><body>404 not found</body></html>");
+		//sock->closeSocket();
+		return;
+	}
+	
+	// Determine File Size
+	unsigned long size;
+	
+	file.seekg (0, ios::end);
+	size = file.tellg();
+	
+	if (file_extension == ".sh") {
+		Cgi cgi;
+		cgi.executeCGI(filename, sock->accept_fd, headermap);
+		sock->closeSocket();
+		return;
+	}
+	
+	//TODO: optimize Log to be a singleton
+	Log log;
+	log.openLogFile("logs/access_log");
+	log.writeLogLine(inet_ntoa(sock->client.sin_addr), 
+					 request_line, 200, size, 
+					 headermap["Referer"],
+					 headermap["User-Agent"]);
+	log.closeLogFile();
+	
+	//TODO: optimize Mime to be a singleton	
+	Mime mime;
+	mime.readMimeConfig("mime.types");
+	
+	/* BUG: There is a possible bug where the file size changes between sending the header
+            and when the file is actually sent through the socket.
+	*/
+	sendHeader(200, size, mime.getMimeFromExtension(filename), keep_alive);
+	sendFile(filename);
 }
 
 /**
@@ -300,8 +327,6 @@ string Http::getHeader()
         if ( strstr(clientBuffer.c_str(), "\n\n") != NULL)
             break;
     }
-
-    //    cout << clientBuffer << "header ends" << endl;
 
     return clientBuffer;
 }
