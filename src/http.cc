@@ -212,7 +212,7 @@ bool Http::parseHeader(string header)
     /* Seperate the client request headers by newline */
     token.tokenize(header, tokens, "\n");   
   
-    /* The first line of the client request is always GET, HEAD, POST, etc */
+    /* The first line of the client request should always be GET, HEAD, POST, etc */
     request_line = tokens[0];
     token.tokenize(tokens[0], tokentmp, " ");
     headermap[tokentmp[0]] = tokentmp[1];
@@ -250,9 +250,16 @@ bool Http::parseHeader(string header)
 		processGetRequest(headermap, request_line, keep_alive);	
 	} else if (headermap.find("HEAD") != headermap.end()) { 
 		processHeadRequest(headermap);
+	} else if (headermap.find("POST") != headermap.end()) {
+		processPostRequest(headermap);
 	}
 	
 	return keep_alive;
+}
+
+void Http::processPostRequest(map<string, string> headermap)
+{
+	sock->writeLine("yeah right d00d\n");
 }
 
 void Http::processHeadRequest(map<string, string> headermap)
@@ -344,7 +351,7 @@ void Http::sendHeader(int code, int size, string file_type, bool keep_alive)
             sock->writeLine("HTTP/1.1 200 OK\r\n");
             break;
         case 404:
-            sock->writeLine("HTTP/1.1 404 NOT FOUND\r\n");
+            sock->writeLine("HTTP/1.1 404 Not Found\r\n");
             break;
         default:
             cerr << "Wrong HTTP CODE!" << endl;

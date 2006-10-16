@@ -27,7 +27,8 @@ private:
     void sendFile(string filename);
 	void processHeadRequest(map<string, string> headermap);
 	void processGetRequest(map<string, string> headermap, string request_line, bool keep_alive);
-
+	void processPostRequest(map<string, string> headermap);
+	
 
 public:
     void sendHeader(int code, int size, string file_type = "text/plain", 
