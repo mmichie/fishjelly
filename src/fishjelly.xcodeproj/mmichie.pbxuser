@@ -48,7 +48,7 @@
 					20,
 					243,
 					20,
-					48.1626,
+					48,
 					43,
 					43,
 					20,
@@ -71,7 +71,7 @@
 					20,
 					301,
 					20,
-					48.1626,
+					48,
 					43,
 					43,
 					20,
@@ -150,10 +150,11 @@
 	CD7FACC20C12799000F3A84E /* Source Control */ = {
 		isa = PBXSourceControlManager;
 		fallbackIsa = XCSourceControlManager;
-		isSCMEnabled = 0;
+		isSCMEnabled = 1;
 		scmConfiguration = {
+			SubversionToolPath = /usr/local/bin/svn;
 		};
-		scmType = "";
+		scmType = scm.subversion;
 	};
 	CD7FACC30C12799000F3A84E /* Code sense */ = {
 		isa = PBXCodeSenseManager;
