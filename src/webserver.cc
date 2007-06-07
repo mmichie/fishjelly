@@ -3,26 +3,20 @@
 bool createPidFile(string filename, int pid) 
 {
 	ofstream pidfile;
-    pidfile.open(filename.c_str(), ios::out | ios::app);
-    if (pidfile.is_open()) { 
-        if (DEBUG) {
-            cout << "Opened PID file: " << pid << endl;
-        }
+    pidfile.open(filename.c_str(), ios::out | ios::trunc);
 
-        return true;
-    } else {
+    if (!pidfile.is_open()) { 
         cerr << "Error: Unable to open PID file (" << filename << ")" << endl;
         return false;
     }
 
-	pidfile << pid << endl;
+	if (pidfile.is_open()) {
+		pidfile << pid << endl;
+	}
 	
-    if (!pidfile.is_open()) {
-        pidfile.close(); 
-        return true;
-    } else
-        return false;
-}
+    pidfile.close(); 
+    return true;
+ }
 
 void controlBreak(int sigNo)
 {
