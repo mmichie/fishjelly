@@ -7,7 +7,7 @@
 #include <config.h>
 #endif
 
-#define DEBUG 0
+#define DEBUG 1
 
 using namespace std;
 

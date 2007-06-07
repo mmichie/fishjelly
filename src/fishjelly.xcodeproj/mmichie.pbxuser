@@ -2,7 +2,6 @@
 {
 	08FB7793FE84155DC02AAC07 /* Project object */ = {
 		activeBuildConfigurationName = Debug;
-		activeBuildStyle = 014CEA460018CE2711CA2923 /* Debug */;
 		activeExecutable = CD7FACB70C12798200F3A84E /* fishjelly */;
 		activeTarget = 8DD76F620486A84900D96B5E /* fishjelly */;
 		addToTargets = (
@@ -69,7 +68,7 @@
 				PBXFileTableDataSourceColumnWidthsKey = (
 					20,
 					20,
-					301,
+					424,
 					20,
 					48,
 					43,
@@ -109,8 +108,8 @@
 					PBXFileDataSource_Warnings_ColumnID,
 				);
 			};
-			PBXPerProjectTemplateStateSaveDate = 202537347;
-			PBXWorkspaceStateSaveDate = 202537347;
+			PBXPerProjectTemplateStateSaveDate = 202671517;
+			PBXWorkspaceStateSaveDate = 202671517;
 		};
 		sourceControlManager = CD7FACC20C12799000F3A84E /* Source Control */;
 		userBuildSettings = {
@@ -129,10 +128,9 @@
 		);
 		argumentStrings = (
 		);
+		autoAttachOnCrash = 1;
 		configStateDict = {
 		};
-		cppStopOnCatchEnabled = 0;
-		cppStopOnThrowEnabled = 0;
 		customDataFormattersEnabled = 1;
 		debuggerPlugin = GDBDebugging;
 		disassemblyDisplayState = 0;
@@ -144,6 +142,8 @@
 		executableUserSymbolLevel = 0;
 		libgmallocEnabled = 0;
 		name = fishjelly;
+		savedGlobals = {
+		};
 		sourceDirectories = (
 		);
 	};
@@ -159,5 +159,13 @@
 	CD7FACC30C12799000F3A84E /* Code sense */ = {
 		isa = PBXCodeSenseManager;
 		indexTemplatePath = "";
+	};
+	CD7FACC80C1279DE00F3A84E /* log.cc */ = {
+		uiCtxt = {
+			sepNavIntBoundsRect = "{{0, 0}, {1001, 1036}}";
+			sepNavSelRange = "{0, 0}";
+			sepNavVisRect = "{{0, 0}, {1001, 484}}";
+			sepNavWindowFrame = "{{15, 230}, {1040, 613}}";
+		};
 	};
 }

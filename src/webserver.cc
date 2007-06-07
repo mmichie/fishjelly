@@ -1,5 +1,29 @@
 #include "webserver.h"
 
+bool createPidFile(string filename, int pid) 
+{
+	ofstream pidfile;
+    pidfile.open(filename.c_str(), ios::out | ios::app);
+    if (pidfile.is_open()) { 
+        if (DEBUG) {
+            cout << "Opened PID file: " << pid << endl;
+        }
+
+        return true;
+    } else {
+        cerr << "Error: Unable to open PID file (" << filename << ")" << endl;
+        return false;
+    }
+
+	pidfile << pid << endl;
+	
+    if (!pidfile.is_open()) {
+        pidfile.close(); 
+        return true;
+    } else
+        return false;
+}
+
 void controlBreak(int sigNo)
 {
     /* Reset signal handler */
@@ -32,6 +56,7 @@ int main(int argc, char *argv[])
 
 	int port;
 	
+	static const int pid = getpid();
 	extern char *optarg;
 	extern int  opterr;
 
@@ -56,7 +81,7 @@ int main(int argc, char *argv[])
 			break;
 			case 'p':
 				port = atoi(optarg);
-				cout << "Starting on port " << port << endl;
+				cout << "Starting on port " << port << " process ID: " << pid << endl;
 			break;
 			case '?':
 				cerr << "Unknown option" << endl;
@@ -87,6 +112,7 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 	
+	createPidFile("fishjelly.pid", pid);
     // Start the webserver with port given on commandline
     webserver.start(port);
 
