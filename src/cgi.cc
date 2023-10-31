@@ -31,17 +31,18 @@ void Cgi::setupEnv(map<string, string> headermap) {
     setenv("SERVER_SOFTWARE", "SHELOB/3.14", 1);
 }
 
-bool Cgi::executeCGI(string filename, int accept_fd,
-                     map<string, string> headermap) {
+bool Cgi::executeCGI(std::string filename, int accept_fd,
+                     std::map<std::string, std::string> headermap) {
     int pid;
     char current_path[MAXPATHLEN];
-    ostringstream buffer;
-    string fullpath;
+    std::ostringstream buffer;
+    std::string fullpath;
 
     pid = fork();
 
     if (pid < 0) {
         perror("ERROR on fork");
+        return false;  // Fork failed, returning false.
     }
 
     /* Child */
@@ -53,12 +54,20 @@ bool Cgi::executeCGI(string filename, int accept_fd,
         filename = filename.substr(7);
         printf("HTTP/1.1 200 OK\r\n");
 
-        getcwd(current_path, MAXPATHLEN);
+        if (getcwd(current_path, MAXPATHLEN) == nullptr) {
+            perror("getcwd failed");
+            exit(1);  // Terminate the child process
+        }
+
         buffer << current_path << "/htdocs/" << filename;
         fullpath = buffer.str();
-        execlp(fullpath.c_str(), filename.c_str(), 0);
+
+        // Added nullptr as sentinel
+        execlp(fullpath.c_str(), filename.c_str(), nullptr);
 
         perror("CGI error");
-        exit(1);
+        exit(1);  // If exec fails, terminate the child process.
     }
+
+    return true;  // Successful execution
 }
