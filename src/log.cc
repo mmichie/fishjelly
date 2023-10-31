@@ -1,71 +1,61 @@
 #include "log.h"
+#include <filesystem>
+#include <iomanip>
 
-bool Log::openLogFile(string filename) {
+bool Log::openLogFile(const std::string &filename) {
     if (logfile.is_open()) {
-        if (DEBUG)
-            cout << "Log file already open!\n";
+        if constexpr (DEBUG) {
+            std::cout << "Log file already open!\n";
+        }
         return true;
     }
 
-    /* TODO: Check when opening files - can an attacker redirect it (via
-   symlinks), force the opening of special file type (e.g., device files), move
-   things around to create a race condition, control its ancestors, or change
-   its contents?
-*/
-    logfile.open(filename.c_str(), ios::out | ios::app);
+    // Ensure the directory exists
+    std::filesystem::path logPath(filename);
+    if (!std::filesystem::exists(logPath.parent_path())) {
+        std::filesystem::create_directories(logPath.parent_path());
+    }
+
+    logfile.open(filename, std::ios::out | std::ios::app);
     if (logfile.is_open()) {
-        if (DEBUG) {
-            cout << "Opened log file\n";
+        if constexpr (DEBUG) {
+            std::cout << "Opened log file\n";
         }
-
         return true;
-
     } else {
-        cerr << "Error: Unable to open log file (" << filename << ")" << endl;
+        std::cerr << "Error: Unable to open log file (" << filename << ")\n";
         return false;
     }
 }
 
 bool Log::closeLogFile() {
-    if (!logfile.is_open()) {
+    if (logfile.is_open()) {
         logfile.close();
         return true;
-    } else
+    } else {
         return false;
+    }
 }
 
-string Log::makeDate() {
-    ostringstream date;
-    ostringstream cdate;
+std::string Log::makeDate() {
+    auto t = std::time(nullptr);
+    auto tm = *std::gmtime(&t);
 
-    char buf[50];
-    time_t ltime;
-    struct tm *today;
-    ltime = time(NULL);
-    today = gmtime(&ltime);
-
-    strftime(buf, sizeof(buf), "[%d/%b/%Y:%H:%M:%S %z]", today);
-
-    string buffer(buf);
-
-    return buffer;
+    std::ostringstream oss;
+    oss << std::put_time(&tm, "[%d/%b/%Y:%H:%M:%S %z]");
+    return oss.str();
 }
 
-/*
-198.7.247.203 - - [24/May/2006:13:07:19 -0600] "GET / HTTP/1.1" 200 9669
-"http://hivearchive.com/" "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.0;
-.NET CLR 1.0.3705)"
-*/
-bool Log::writeLogLine(string ip, string request, int code, int size,
-                       string referrer, string agent) {
+bool Log::writeLogLine(const std::string &ip, const std::string &request,
+                       int code, int size, const std::string &referrer,
+                       const std::string &agent) {
     if (logfile.is_open()) {
-        logfile << ip << " - - "
-                << " " << this->makeDate() << " \"" << request << "\""
-                << " " << code << " " << size << " \"" << referrer << "\" \""
-                << agent << "\"\n";
+        logfile << ip << " - - " << makeDate() << " \"" << request << "\" "
+                << code << ' ' << size << " \"" << referrer << "\" \"" << agent
+                << "\"\n";
         return true;
     } else {
-        cerr << "Unable to write to logfile\n";
+        std::cerr << "Unable to write to logfile\n";
         return false;
     }
 }

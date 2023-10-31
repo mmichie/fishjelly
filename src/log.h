@@ -10,10 +10,10 @@
 
 class Log {
   public:
-    bool openLogFile(string filename);
     bool closeLogFile();
-    bool writeLogLine(string ip, string request, int code, int size,
-                      string referrer, string agent);
+    bool openLogFile(const std::string& filename);
+    bool writeLogLine(const std::string& ip, const std::string& request, int code, int size, const std::string& referrer, const std::string& agent);
+
 
   private:
     string makeDate();
