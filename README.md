@@ -1,4 +1,4 @@
-# shelob
+# fishjelly
 C++ Web Server
 
 ## Build
