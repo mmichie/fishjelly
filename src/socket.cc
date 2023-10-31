@@ -1,123 +1,108 @@
+// socket.cc
 #include "socket.h"
+#include <iostream>  // for std::cerr, std::cout
+#include <stdexcept> // for std::runtime_error
 #include <unistd.h>
 
 /**
- * Closes the socket.
+ * Safely closes the socket and its associated file pointer.
  */
 void Socket::closeSocket() {
-    if (DEBUG)
-        cout << "Closing socket" << endl;
+    if (DEBUG) {
+        std::cout << "Closing socket" << std::endl;
+    }
 
-    fclose(socket_fp);
+    if (fclose(socket_fp) != 0) {
+        std::cerr << "Failed to close socket file pointer" << std::endl;
+    }
 }
 
 /**
- * Accepts the client on the socket file descriptor.
+ * Accepts a client connection and updates the internal state of the socket.
  */
 void Socket::acceptClient() {
-    bool interrupted;
     sin_size = sizeof(struct sockaddr_in);
 
-    interrupted = false;
+    while (true) {
+        accept_fd =
+            accept(socket_fd, reinterpret_cast<struct sockaddr *>(&client),
+                   reinterpret_cast<socklen_t *>(&sin_size));
 
-    while (!interrupted) {
-        accept_fd = accept(socket_fd, (struct sockaddr *)&client,
-                           (socklen_t *)&sin_size);
-        if (-1 == accept_fd) {
-            if (EINTR == errno) {
-                continue; /* Restart accept */
+        if (accept_fd == -1) {
+            if (errno == EINTR) {
+                continue; // Restart accept
             } else {
-                perror("Accept");
-                interrupted = true;
+                throw std::runtime_error("Failed to accept client");
             }
         } else {
             break;
         }
     }
-    /*
-       if (accept_fd < 0) {
-       perror("Accept");
-       exit(1);
-       }
-     */
 
     if (DEBUG) {
-        fprintf(stdout, "Client accepted from %s... my pid is %d\n",
-                inet_ntoa(client.sin_addr), getpid());
+        std::cout << "Client accepted from " << inet_ntoa(client.sin_addr)
+                  << "... my pid is " << getpid() << std::endl;
     }
 
     socket_fp = fdopen(accept_fd, "r");
-}
-
-/**
- * Writes a string to the current socket.
- */
-void Socket::writeLine(string line) {
-    if (send(accept_fd, line.data(), line.size(), 0) == -1) {
-        perror("writeLine");
+    if (socket_fp == nullptr) {
+        throw std::runtime_error("Failed to open file descriptor");
     }
 }
 
 /**
- *  Reads one line from socket.
- *  NOTE: Casting EOF to a char is probably an unsafe operation
- *  TODO: Refactor this code, double check overflow conditions
+ * Sends a string to the connected client.
  */
-bool Socket::readLine(string *buffer) {
-    char c;
-    //    string buffer;
+void Socket::writeLine(const std::string &line) {
+    if (send(accept_fd, line.data(), line.size(), 0) == -1) {
+        throw std::runtime_error("Failed to send data");
+    }
+}
 
-    c = fgetc(socket_fp);
+/**
+ * Reads a line from the socket into the provided buffer.
+ */
+bool Socket::readLine(std::string *buffer) {
+    char c = fgetc(socket_fp);
 
-    while ((c != '\n') && (c != (char)EOF) && (c != '\r')) {
-        *buffer += c;
+    while (c != '\n' && c != EOF && c != '\r') {
+        buffer->push_back(c);
         c = fgetc(socket_fp);
     }
 
-    if (c == '\n')
-        *buffer += c;
+    if (c == '\n') {
+        buffer->push_back(c);
+    }
 
-    //    cout << &buffer << endl;
-
-    if (c == (char)EOF)
-        return false;
-    else
-        return true;
+    return c != EOF;
 }
 
 /**
- *  Sets up and binds the socket to the correct port.
+ * Initializes and binds the server socket to the given port.
  */
 void Socket::serverBind(int server_port) {
-    int yes = 1; // for setsockopt() SO_REUSEADDR, below
+    int yes = 1; // For setsockopt() SO_REUSEADDR
 
-    // Setup the socket for Internet
-    if ((socket_fd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
-        perror("Socket SFD");
-        exit(1);
+    socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (socket_fd == -1) {
+        throw std::runtime_error("Failed to create socket");
     }
 
-    // lose the pesky "address already in use" error message
     if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) ==
         -1) {
-        perror("setsockopt");
-        exit(1);
+        throw std::runtime_error("Failed to set socket options");
     }
 
     server.sin_family = AF_INET;
-    server.sin_port = htons(server_port); // Bind to port specified
+    server.sin_port = htons(server_port);
     server.sin_addr.s_addr = INADDR_ANY;
 
-    // Bind the socket
-    if (bind(socket_fd, (struct sockaddr *)&server, sizeof(struct sockaddr)) ==
-        -1) {
-        perror("bind");
-        exit(1);
+    if (bind(socket_fd, reinterpret_cast<struct sockaddr *>(&server),
+             sizeof(struct sockaddr)) == -1) {
+        throw std::runtime_error("Failed to bind socket");
     }
 
-    // Listen to that socket with NUM CLIENTS possible pending connections
     if (listen(socket_fd, NUM_CLIENTS_TO_QUEUE) == -1) {
-        perror("listen");
-        exit(1);
+        throw std::runtime_error("Failed to listen on socket");
     }
 }

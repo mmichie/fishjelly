@@ -29,7 +29,8 @@ class Socket {
 
     void acceptClient();
     bool readLine(string *buffer);
-    void writeLine(string line);
+    void writeLine(const std::string &line);
+
     void closeSocket();
 
     // Constructor
