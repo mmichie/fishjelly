@@ -97,8 +97,7 @@ void Socket::serverBind(int server_port) {
     server.sin_port = htons(server_port);
     server.sin_addr.s_addr = INADDR_ANY;
 
-    if (bind(socket_fd, reinterpret_cast<struct sockaddr *>(&server),
-             sizeof(struct sockaddr)) == -1) {
+    if (::bind(socket_fd, (struct sockaddr *)&server, sizeof(server)) == -1) {
         throw std::runtime_error("Failed to bind socket");
     }
 

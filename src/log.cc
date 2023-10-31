@@ -1,5 +1,6 @@
 #include "log.h"
 #include <filesystem>
+#include <ctime>
 #include <iomanip>
 
 bool Log::openLogFile(const std::string &filename) {
