@@ -1,110 +1,83 @@
+// webserver.cc
 #include "webserver.h"
+#include <csignal>
+#include <fstream>
+#include <iostream>
+#include <unistd.h>
 
-bool createPidFile(string filename, int pid) {
-    ofstream pidfile;
-    pidfile.open(filename.c_str(), ios::out | ios::trunc);
+bool createPidFile(const std::string &filename, int pid) {
+    std::ofstream pidfile(filename, std::ios::out | std::ios::trunc);
 
     if (!pidfile.is_open()) {
-        cerr << "Error: Unable to open PID file (" << filename << ")" << endl;
+        std::cerr << "Error: Unable to open PID file (" << filename << ")"
+                  << std::endl;
         return false;
     }
 
-    if (pidfile.is_open()) {
-        pidfile << pid << endl;
-    }
-
-    pidfile.close();
+    pidfile << pid << std::endl;
     return true;
 }
 
 void controlBreak(int sigNo) {
-    /* Reset signal handler */
-    if (signal(SIGINT, controlBreak) == SIG_ERR) {
-        printf("Error setting SIGINT exit with error 1!\n");
-        exit(1);
-    }
-
-    cout << "Exiting program now..." << endl;
-    exit(0);
+    std::cout << "Exiting program now..." << std::endl;
+    std::exit(0);
 }
 
 void reapChildren(int sigNo) {
-    /* Reset signal handler */
-    if (signal(SIGCHLD, reapChildren) == SIG_ERR) {
-        printf("Error setting SIGCHLD exit with error 1!\n");
-        exit(1);
-    }
-
-    /* Make sure we don't end up with zombies */
-    while (waitpid(-1, NULL, WNOHANG) > 0)
+    while (waitpid(-1, nullptr, WNOHANG) > 0)
         ;
 }
 
 Http webserver;
 
 int main(int argc, char *argv[]) {
-
     int port;
-
-    static const int pid = getpid();
-    extern char *optarg;
-    extern int opterr;
-
-    int c;
-    static char optstring[] = "hVp:";
-    opterr = 0;
+    const int pid = getpid();
 
     if (argc < 2) {
-        cerr << "Error: must specify port!" << endl;
-        exit(1);
+        std::cerr << "Error: must specify port!" << std::endl;
+        return 1;
     }
+
+    int c;
+    static const char optstring[] = "hVp:";
 
     while ((c = getopt(argc, argv, optstring)) != -1) {
         switch (c) {
         case 'h':
-            cout << "Help me Elvis, help me!" << endl;
+            std::cout << "Help me Elvis, help me!" << std::endl;
             return 0;
-            break;
         case 'V':
-            cout << "Shelob Version foo" << endl;
+            std::cout << "Shelob Version foo" << std::endl;
             return 0;
-            break;
         case 'p':
-            port = atoi(optarg);
-            cout << "Starting on port " << port << " process ID: " << pid
-                 << endl;
+            port = std::stoi(optarg);
+            std::cout << "Starting on port " << port << " process ID: " << pid
+                      << std::endl;
             break;
         case '?':
-            cerr << "Unknown option" << endl;
+            std::cerr << "Unknown option" << std::endl;
         }
     }
 
-    /* Setup signal handlers */
-    if (signal(SIGCHLD, reapChildren) == SIG_ERR) {
-        cerr << "Error: Problem setting SIGCHLD, exiting with error 1!" << endl;
-        exit(1);
+    if (std::signal(SIGCHLD, reapChildren) == SIG_ERR) {
+        std::cerr << "Error: Problem setting SIGCHLD, exiting with error 1!"
+                  << std::endl;
+        return 1;
     }
 
-    if (signal(SIGINT, controlBreak) == SIG_ERR) {
-        cerr << "Error: Problem setting SIGINT, exiting with error 1!" << endl;
-        exit(1);
+    if (std::signal(SIGINT, controlBreak) == SIG_ERR) {
+        std::cerr << "Error: Problem setting SIGINT, exiting with error 1!"
+                  << std::endl;
+        return 1;
     }
 
-    // Change the root to htdocs for security
-    /*	if (chroot("htdocs") == -1) {
-                    perror("chroot");
-                    cerr << "Could not change to htdocs" << endl;
-            } else {
-                    cout << "Changed root to htdocs" << endl;
-            }
-    */
     if (chdir("base") == -1) {
-        perror("chdir");
-        exit(1);
+        std::perror("chdir");
+        return 1;
     }
 
     createPidFile("fishjelly.pid", pid);
-    // Start the webserver with port given on commandline
     webserver.start(port);
 
     return 0;
