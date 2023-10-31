@@ -1,0 +1,56 @@
+# Compiled Object files
+*.o
+*.obj
+*.so
+*.out
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.dylib
+*.dll
+
+# Executable files
+*.exe
+*.out
+
+# Build directories
+build/
+Debug/
+Release/
+
+# IDE files (Visual Studio, CLion, etc.)
+*.user
+*.suo
+*.sln
+*.swp
+*.idea/
+*.vscode/
+
+# Other files
+*.bak
+*.swp
+*.swo
+*.log
+*.lock
+.DS_Store
+
+
+Makefile
+Makefile.in
+aclocal.m4
+autom4te.cache/
+compile
+config.h
+config.h.in
+config.status
+configure
+depcomp
+install-sh
+missing
+src/.deps/
+src/Makefile.in
+src/shelob
+stamp-h1
