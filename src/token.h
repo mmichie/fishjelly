@@ -6,10 +6,9 @@
 #include <vector>
 
 class Token {
-	public:
-		void tokenize(const string& str, 
-		vector<string>& tokens, 
-		const string& delimiters);
+  public:
+    void tokenize(const string &str, vector<string> &tokens,
+                  const string &delimiters);
 };
 
 #endif /* !SHELOB_TOKEN_H */
