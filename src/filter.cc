@@ -1,21 +1,20 @@
 #include "filter.h"
 
-/** 
+/**
  * Takes unfiltered string and appends footer before the end body tag.
  */
-string Filter::addFooter(string unfiltered)
-{
+string Filter::addFooter(string unfiltered) {
     string filtered;
     unsigned int filter_index;
 
-    filter_index = unfiltered.find("</body>", 0);    
+    filter_index = unfiltered.find("</body>", 0);
 
     if (DEBUG) {
         if (filter_index != string::npos)
             cout << "Found </body> at " << filter_index << endl;
         else {
             cout << "Didn't find </body>" << endl;
-        } 
+        }
     }
 
     unsigned int i;

@@ -1,11 +1,10 @@
-#include <unistd.h>
 #include "socket.h"
+#include <unistd.h>
 
 /**
  * Closes the socket.
  */
-void Socket::closeSocket()
-{
+void Socket::closeSocket() {
     if (DEBUG)
         cout << "Closing socket" << endl;
 
@@ -15,16 +14,15 @@ void Socket::closeSocket()
 /**
  * Accepts the client on the socket file descriptor.
  */
-void Socket::acceptClient()
-{
+void Socket::acceptClient() {
     bool interrupted;
     sin_size = sizeof(struct sockaddr_in);
 
     interrupted = false;
 
     while (!interrupted) {
-        accept_fd = accept(socket_fd, (struct sockaddr *) &client, 
-                (socklen_t *)&sin_size);
+        accept_fd = accept(socket_fd, (struct sockaddr *)&client,
+                           (socklen_t *)&sin_size);
         if (-1 == accept_fd) {
             if (EINTR == errno) {
                 continue; /* Restart accept */
@@ -44,35 +42,34 @@ void Socket::acceptClient()
      */
 
     if (DEBUG) {
-        fprintf(stdout, "Client accepted from %s... my pid is %d\n", inet_ntoa(client.sin_addr), getpid());
+        fprintf(stdout, "Client accepted from %s... my pid is %d\n",
+                inet_ntoa(client.sin_addr), getpid());
     }
 
-    socket_fp = fdopen(accept_fd, "r"); 
+    socket_fp = fdopen(accept_fd, "r");
 }
 
 /**
  * Writes a string to the current socket.
-*/
-void Socket::writeLine(string line)
-{
+ */
+void Socket::writeLine(string line) {
     if (send(accept_fd, line.data(), line.size(), 0) == -1) {
         perror("writeLine");
-    }	
+    }
 }
 
 /**
- *  Reads one line from socket.                                               
+ *  Reads one line from socket.
  *  NOTE: Casting EOF to a char is probably an unsafe operation
- *  TODO: Refactor this code, double check overflow conditions  
+ *  TODO: Refactor this code, double check overflow conditions
  */
-bool Socket::readLine(string *buffer)
-{
+bool Socket::readLine(string *buffer) {
     char c;
     //    string buffer;
 
     c = fgetc(socket_fp);
 
-    while ( (c != '\n') && (c != (char)EOF) && (c != '\r') ) {
+    while ((c != '\n') && (c != (char)EOF) && (c != '\r')) {
         *buffer += c;
         c = fgetc(socket_fp);
     }
@@ -88,12 +85,10 @@ bool Socket::readLine(string *buffer)
         return true;
 }
 
-
 /**
- *  Sets up and binds the socket to the correct port.  
+ *  Sets up and binds the socket to the correct port.
  */
-void Socket::serverBind(int server_port)
-{
+void Socket::serverBind(int server_port) {
     int yes = 1; // for setsockopt() SO_REUSEADDR, below
 
     // Setup the socket for Internet
@@ -103,7 +98,8 @@ void Socket::serverBind(int server_port)
     }
 
     // lose the pesky "address already in use" error message
-    if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1) {
+    if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) ==
+        -1) {
         perror("setsockopt");
         exit(1);
     }
@@ -113,7 +109,8 @@ void Socket::serverBind(int server_port)
     server.sin_addr.s_addr = INADDR_ANY;
 
     // Bind the socket
-    if (bind(socket_fd, (struct sockaddr *) &server, sizeof(struct sockaddr)) == -1) {
+    if (bind(socket_fd, (struct sockaddr *)&server, sizeof(struct sockaddr)) ==
+        -1) {
         perror("bind");
         exit(1);
     }
@@ -124,4 +121,3 @@ void Socket::serverBind(int server_port)
         exit(1);
     }
 }
-
