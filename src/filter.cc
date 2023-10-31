@@ -5,7 +5,7 @@
  */
 string Filter::addFooter(string unfiltered) {
     string filtered;
-    unsigned int filter_index;
+    std::string::size_type filter_index;
 
     filter_index = unfiltered.find("</body>", 0);
 
