@@ -1,37 +1,23 @@
-#                                               -*- Autoconf -*-
-# Process this file with autoconf to produce a configure script.
-
 AC_PREREQ(2.59)
-#AC_INIT(shelob, 0.6, mmichie@gmail.com)
-AC_INIT(src/webserver.cc)
+AC_INIT([fishjelly], [0.6], [mmichie@gmail.com])
 AC_CONFIG_SRCDIR([config.h.in])
-AM_CONFIG_HEADER([config.h])
+AC_CONFIG_HEADERS([config.h])
 # Checks for programs.
 AC_PROG_CXX
 AC_PROG_CC
 AC_PROG_INSTALL
 AC_PROG_AWK
 
-AM_INIT_AUTOMAKE(shelob, 0.6)
-
-# Checks for libraries.
+AM_INIT_AUTOMAKE([foreign])
 
 # Checks for header files.
-AC_HEADER_DIRENT
-AC_HEADER_STDC
-AC_HEADER_SYS_WAIT
-AC_CHECK_HEADERS([arpa/inet.h limits.h netdb.h netinet/in.h stdlib.h strings.h sys/socket.h sys/time.h unistd.h])
+AC_CHECK_HEADERS([dirent.h arpa/inet.h limits.h netdb.h netinet/in.h stdlib.h strings.h sys/socket.h sys/time.h unistd.h sys/wait.h])
+
 
 # Checks for typedefs, structures, and compiler characteristics.
-AC_HEADER_STDBOOL
-AC_C_CONST
-AC_STRUCT_TM
+AC_CHECK_HEADER_STDBOOL
+AC_CHECK_FUNCS([fork mktime strftime inet_ntoa socket strstr])
 
-# Checks for library functions.
-AC_FUNC_FORK
-AC_FUNC_MKTIME
-AC_TYPE_SIGNAL
-AC_FUNC_STRFTIME
-AC_CHECK_FUNCS([inet_ntoa socket strstr])
+AC_CONFIG_FILES([Makefile src/Makefile])
+AC_OUTPUT
 
-AC_OUTPUT([Makefile src/Makefile])
