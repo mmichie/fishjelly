@@ -5,6 +5,10 @@
 #include <unistd.h>
 #include <optional>
 
+#ifndef GIT_HASH
+#define GIT_HASH "unknown"
+#endif
+
 /**
  * Creates a PID file with the given filename and writes the process ID to it.
  * @param filename The name of the PID file.
@@ -52,10 +56,19 @@ void fatalError(const std::string& message) {
 }
 
 /**
+ * Displays the help text.
+ */
+void showHelp() {
+    std::cout << "Usage: webserver [options]\n"
+              << "Options:\n"
+              << "  -h, --help       Show this help message and exit\n"
+              << "  -V, --version    Show version information and exit\n"
+              << "  -p, --port PORT  Specify the port to listen on\n";
+}
+
+
+/**
  * Parses command line options and returns the specified port if available.
- * @param argc The number of command line arguments.
- * @param argv The array of command line arguments.
- * @return Optional containing the port if specified, otherwise std::nullopt.
  */
 std::optional<int> parseCommandLineOptions(int argc, char *argv[]) {
     int port;
@@ -65,16 +78,17 @@ std::optional<int> parseCommandLineOptions(int argc, char *argv[]) {
     while ((c = getopt(argc, argv, optstring)) != -1) {
         switch (c) {
         case 'h':
-            std::cout << "Help me Elvis, help me!" << std::endl;
+            showHelp();
             std::exit(0);
         case 'V':
-            std::cout << "Shelob Version foo" << std::endl;
+            std::cout << "Webserver Version: " << GIT_HASH << std::endl;
             std::exit(0);
         case 'p':
             port = std::stoi(optarg);
             return port;
         case '?':
-            fatalError("Unknown option");
+            showHelp();
+            std::exit(1);
         }
     }
     return std::nullopt;
