@@ -30,6 +30,10 @@ class Socket {
     void acceptClient();
     bool readLine(string *buffer);
     void writeLine(const std::string &line);
+    void handleError(const std::string& message);
+    void setSocketOptions();
+    void bindSocket(int server_port);
+
 
     void closeSocket();
 

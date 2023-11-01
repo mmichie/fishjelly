@@ -5,6 +5,22 @@
 #include <unistd.h>
 
 /**
+ * SocketException class for specialized socket error handling.
+ */
+class SocketException : public std::runtime_error {
+public:
+    SocketException(const std::string& message) : std::runtime_error(message) {}
+};
+
+/**
+ * Centralized error handler for the Socket class.
+ */
+void Socket::handleError(const std::string& message) {
+    std::cerr << message << std::endl;
+    throw SocketException(message);
+}
+
+/**
  * Safely closes the socket and its associated file pointer.
  */
 void Socket::closeSocket() {
@@ -13,7 +29,7 @@ void Socket::closeSocket() {
     }
 
     if (fclose(socket_fp) != 0) {
-        std::cerr << "Failed to close socket file pointer" << std::endl;
+        handleError("Failed to close socket file pointer");
     }
 }
 
@@ -32,7 +48,7 @@ void Socket::acceptClient() {
             if (errno == EINTR) {
                 continue; // Restart accept
             } else {
-                throw std::runtime_error("Failed to accept client");
+                handleError("Failed to accept client");
             }
         } else {
             break;
@@ -46,7 +62,7 @@ void Socket::acceptClient() {
 
     socket_fp = fdopen(accept_fd, "r");
     if (socket_fp == nullptr) {
-        throw std::runtime_error("Failed to open file descriptor");
+        handleError("Failed to open file descriptor");
     }
 }
 
@@ -55,7 +71,7 @@ void Socket::acceptClient() {
  */
 void Socket::writeLine(const std::string &line) {
     if (send(accept_fd, line.data(), line.size(), 0) == -1) {
-        throw std::runtime_error("Failed to send data");
+        handleError("Failed to send data");
     }
 }
 
@@ -78,30 +94,41 @@ bool Socket::readLine(std::string *buffer) {
 }
 
 /**
- * Initializes and binds the server socket to the given port.
+ * Sets socket options.
  */
-void Socket::serverBind(int server_port) {
+void Socket::setSocketOptions() {
     int yes = 1; // For setsockopt() SO_REUSEADDR
-
-    socket_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (socket_fd == -1) {
-        throw std::runtime_error("Failed to create socket");
+    if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1) {
+        handleError("Failed to set socket options");
     }
+}
 
-    if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) ==
-        -1) {
-        throw std::runtime_error("Failed to set socket options");
-    }
-
+/**
+ * Binds the server socket.
+ */
+void Socket::bindSocket(int server_port) {
     server.sin_family = AF_INET;
     server.sin_port = htons(server_port);
     server.sin_addr.s_addr = INADDR_ANY;
 
     if (::bind(socket_fd, (struct sockaddr *)&server, sizeof(server)) == -1) {
-        throw std::runtime_error("Failed to bind socket");
+        handleError("Failed to bind socket");
+    }
+}
+
+/**
+ * Initializes and binds the server socket to the given port.
+ */
+void Socket::serverBind(int server_port) {
+    socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (socket_fd == -1) {
+        handleError("Failed to create socket");
     }
 
+    setSocketOptions();
+    bindSocket(server_port);
+
     if (listen(socket_fd, NUM_CLIENTS_TO_QUEUE) == -1) {
-        throw std::runtime_error("Failed to listen on socket");
+        handleError("Failed to listen on socket");
     }
 }
