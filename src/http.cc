@@ -153,7 +153,7 @@ void Http::sendFile(string filename) {
     file.seekg(0, ios::beg);
     file.read(buffer, size);
 
-    if (file.gcount() != size) {
+    if (file.gcount() != static_cast<streamsize>(size)) {
         cerr << "Error with read!" << endl;
         file.close();
         return;
@@ -252,10 +252,12 @@ bool Http::parseHeader(string header) {
 }
 
 void Http::processPostRequest(map<string, string> headermap) {
+    (void)headermap; // Suppress unused parameter warning
     sock->writeLine("yeah right d00d\n");
 }
 
 void Http::processHeadRequest(map<string, string> headermap) {
+    (void)headermap; // Suppress unused parameter warning
     sock->writeLine("HAR HAR !\n");
 }
 

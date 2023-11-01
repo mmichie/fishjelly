@@ -33,6 +33,8 @@ bool createPidFile(const std::string &filename, int pid) {
  * @param sigNo The signal number.
  */
 void reapChildren(int sigNo) {
+    (void)sigNo; // Suppress unused parameter warning
+
     while (waitpid(-1, nullptr, WNOHANG) > 0)
         ;
 }
@@ -42,6 +44,8 @@ void reapChildren(int sigNo) {
  * @param sigNo The signal number.
  */
 void controlBreak(int sigNo) {
+    (void)sigNo; // Suppress unused parameter warning
+
     std::cout << "Exiting program now..." << std::endl;
     std::exit(0);
 }
