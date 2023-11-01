@@ -256,9 +256,47 @@ void Http::processPostRequest(map<string, string> headermap) {
     sock->writeLine("yeah right d00d\n");
 }
 
+/**
+ * Processes an HTTP HEAD request.
+ * @param headermap A map containing parsed HTTP headers.
+ */
 void Http::processHeadRequest(map<string, string> headermap) {
-    (void)headermap; // Suppress unused parameter warning
-    sock->writeLine("HAR HAR !\n");
+    string filename = headermap["HEAD"];
+    string file_extension;
+
+    filename = sanitizeFilename(filename);
+
+    // Open file
+    ifstream file(filename.c_str(), ios::in | ios::binary);
+
+    // Find the extension (assumes the extension is whatever follows the last
+    // '.')
+    file_extension = filename.substr(filename.rfind("."), filename.length());
+
+    // Can't find the file, send 404 header
+    if (!file.is_open()) {
+        sendHeader(404, 0, "text/html", false);
+        return;
+    }
+
+    // Determine File Size
+    unsigned long size;
+    file.seekg(0, ios::end);
+    size = file.tellg();
+
+    // TODO: Optimize Log to be a singleton
+    Log log;
+    log.openLogFile("logs/access_log");
+    log.writeLogLine(inet_ntoa(sock->client.sin_addr), "HEAD " + filename, 200,
+                     size, headermap["Referer"], headermap["User-Agent"]);
+    log.closeLogFile();
+
+    // TODO: Optimize Mime to be a singleton
+    Mime mime;
+    mime.readMimeConfig("mime.types");
+
+    // Send header
+    sendHeader(200, size, mime.getMimeFromExtension(filename), false);
 }
 
 void Http::processGetRequest(map<string, string> headermap, string request_line,
