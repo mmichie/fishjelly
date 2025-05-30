@@ -43,7 +43,7 @@ class Http {
     void sendHeader(int code, int size, std::string_view file_type = "text/plain",
                     bool keep_alive = false);
     void sendOptionsHeader(bool keep_alive = false);
-    std::string getHeader();
+    std::string getHeader(bool use_timeout = false);
     void start(int server_port);
     bool parseHeader(std::string_view header);
     void setTestMode(int requests) { test_requests = requests; }

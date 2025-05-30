@@ -28,6 +28,7 @@ class Socket {
 
     void acceptClient();
     bool readLine(std::string* buffer);
+    bool readLineWithTimeout(std::string* buffer, int timeout_seconds);
     void writeLine(std::string_view line);
     void handleError(std::string_view message);
     void setSocketOptions();

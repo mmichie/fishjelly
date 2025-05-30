@@ -3,6 +3,7 @@
 #include <iostream>  // for std::cerr, std::cout
 #include <stdexcept> // for std::runtime_error
 #include <unistd.h>
+#include <poll.h>
 
 /**
  * SocketException class for specialized socket error handling.
@@ -132,6 +133,44 @@ bool Socket::readLine(std::string* buffer) {
     }
 
     return c != EOF;
+}
+
+/**
+ * Reads a line from the socket with a timeout.
+ */
+bool Socket::readLineWithTimeout(std::string* buffer, int timeout_seconds) {
+    if (!socket_fp || accept_fd < 0) {
+        return false;
+    }
+
+    // Use poll to check if data is available
+    struct pollfd pfd;
+    pfd.fd = accept_fd;
+    pfd.events = POLLIN;
+    pfd.revents = 0;
+
+    // Convert seconds to milliseconds
+    int timeout_ms = timeout_seconds * 1000;
+    
+    // Wait for data or timeout
+    int ret = poll(&pfd, 1, timeout_ms);
+    
+    if (ret < 0) {
+        // Error occurred
+        if (DEBUG) {
+            std::cerr << "Poll error: " << strerror(errno) << std::endl;
+        }
+        return false;
+    } else if (ret == 0) {
+        // Timeout occurred
+        if (DEBUG) {
+            std::cout << "Read timeout after " << timeout_seconds << " seconds" << std::endl;
+        }
+        return false;
+    }
+    
+    // Data is available, use regular readLine
+    return readLine(buffer);
 }
 
 /**

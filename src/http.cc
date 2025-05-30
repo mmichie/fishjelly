@@ -133,9 +133,16 @@ void Http::start(int server_port) {
 
         /* Child */
         if (pid == 0) {
-            keep_alive = parseHeader(getHeader());
+            // First request doesn't use timeout
+            keep_alive = parseHeader(getHeader(false));
             while (keep_alive) {
-                keep_alive = parseHeader(getHeader());
+                // Subsequent requests use timeout for keep-alive
+                std::string header = getHeader(true);
+                if (header.empty()) {
+                    // Timeout or connection closed
+                    break;
+                }
+                keep_alive = parseHeader(header);
             }
 
             sock->closeSocket();
@@ -565,16 +572,26 @@ void Http::processGetRequest(const std::map<std::string, std::string>& headermap
 /**
  * Receive the client's request headers
  */
-std::string Http::getHeader() {
+std::string Http::getHeader(bool use_timeout) {
     // For testing, return the last header sent
     if (!sock)
         return lastHeader;
 
     std::string clientBuffer;
     std::string line;
+    
+    // For keep-alive connections, use a timeout
+    const int KEEPALIVE_TIMEOUT = 5; // 5 seconds timeout
 
     // Read headers line by line until we get an empty line
-    while (sock->readLine(&line)) {
+    bool read_success;
+    if (use_timeout) {
+        read_success = sock->readLineWithTimeout(&line, KEEPALIVE_TIMEOUT);
+    } else {
+        read_success = sock->readLine(&line);
+    }
+    
+    while (read_success) {
         if (DEBUG) {
             std::cout << "DEBUG getHeader: Read line [" << line << "]" << std::endl;
         }
@@ -592,6 +609,11 @@ std::string Http::getHeader() {
         }
 
         line.clear();
+        if (use_timeout) {
+            read_success = sock->readLineWithTimeout(&line, KEEPALIVE_TIMEOUT);
+        } else {
+            read_success = sock->readLine(&line);
+        }
     }
 
     return clientBuffer;
