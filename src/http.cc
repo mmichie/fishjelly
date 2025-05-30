@@ -97,7 +97,20 @@ void Http::start(int server_port) {
         /* Parent */
         else {
             sock->closeClient(); // Only close client connection, not server socket
+            request_count++;
+
+            // Exit after N requests in test mode
+            if (test_requests > 0 && request_count >= test_requests) {
+                std::cout << "Test mode: Exiting after " << request_count << " requests"
+                          << std::endl;
+                break;
+            }
         }
+    }
+
+    // Print completion message for test mode
+    if (test_requests > 0) {
+        std::cout << "Server shutdown complete." << std::endl;
     }
 }
 
@@ -200,10 +213,20 @@ bool Http::parseHeader(std::string_view header) {
     token.tokenize(request_line, tokentmp, " ");
 
     if (tokentmp.size() < 3) {
+        if (sock) {
+            sendHeader(400, 0, "text/html", false);
+            sock->writeLine("<html><body>400 Bad Request - Malformed request line</body></html>");
+        }
         return false;
     }
 
-    headermap[tokentmp[0]] = tokentmp[1];
+    // Parse method, URI, and HTTP version
+    std::string method = tokentmp[0];
+    std::string uri = tokentmp[1];
+    std::string http_version = tokentmp[2];
+
+    // Store method and URI in headermap for backward compatibility
+    headermap[method] = uri;
 
     /* Seperate each request header with the name and value and insert into a
      * hash map */
@@ -234,9 +257,27 @@ bool Http::parseHeader(std::string_view header) {
 
     /* Print all pairs of the header hash map to console */
     if (DEBUG) {
+        std::cout << "Method: " << method << ", URI: " << uri << ", HTTP Version: " << http_version
+                  << std::endl;
+        std::cout << "Headers:" << std::endl;
         for (const auto& [key, value] : headermap) {
-            std::cout << key << " : " << value << std::endl;
+            if (key != method) { // Don't print method as header
+                std::cout << "  " << key << ": " << value << std::endl;
+            }
         }
+    }
+
+    // HTTP/1.1 requires Host header
+    if (http_version == "HTTP/1.1" && headermap.find("Host") == headermap.end()) {
+        if (DEBUG) {
+            std::cout << "Host header not found for HTTP/1.1 request" << std::endl;
+        }
+        if (sock) {
+            sendHeader(400, 0, "text/html", false);
+            sock->writeLine(
+                "<html><body>400 Bad Request - HTTP/1.1 requires Host header</body></html>");
+        }
+        return false;
     }
 
     if (headermap["Connection"] == "keep-alive")
@@ -249,6 +290,10 @@ bool Http::parseHeader(std::string_view header) {
         headermap.find("POST") == headermap.end()) {
         if (DEBUG) {
             std::cout << "No valid request method found in headermap" << std::endl;
+        }
+        if (sock) {
+            sendHeader(501, 0, "text/html", false);
+            sock->writeLine("<html><body>501 Not Implemented</body></html>");
         }
         return false;
     }
@@ -383,6 +428,9 @@ std::string Http::getHeader() {
 
     // Read headers line by line until we get an empty line
     while (sock->readLine(&line)) {
+        if (DEBUG) {
+            std::cout << "DEBUG getHeader: Read line [" << line << "]" << std::endl;
+        }
         clientBuffer += line;
 
         // Check for end of headers (empty line)
@@ -415,8 +463,14 @@ void Http::sendHeader(int code, int size, std::string_view file_type, bool keep_
     case 200:
         headerStream << "HTTP/1.1 200 OK\r\n";
         break;
+    case 400:
+        headerStream << "HTTP/1.1 400 Bad Request\r\n";
+        break;
     case 404:
         headerStream << "HTTP/1.1 404 Not Found\r\n";
+        break;
+    case 501:
+        headerStream << "HTTP/1.1 501 Not Implemented\r\n";
         break;
     default:
         std::cerr << "Wrong HTTP CODE!" << std::endl;

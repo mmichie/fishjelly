@@ -33,6 +33,8 @@ class Http {
     void processPostRequest(const std::map<std::string, std::string>& headermap);
 
     std::string lastHeader; // Store last sent header for testing
+    int test_requests = 0;  // Exit after N requests (0 = run forever)
+    int request_count = 0;  // Current request count
 
   public:
     void sendHeader(int code, int size, std::string_view file_type = "text/plain",
@@ -40,6 +42,7 @@ class Http {
     std::string getHeader();
     void start(int server_port);
     bool parseHeader(std::string_view header);
+    void setTestMode(int requests) { test_requests = requests; }
 
     std::unique_ptr<Socket> sock;
 };

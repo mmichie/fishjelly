@@ -7,6 +7,6 @@
 #include <config.h>
 #endif
 
-#define DEBUG 1
+#define DEBUG 0
 
 #endif /* !SHELOB_GLOBAL_H */

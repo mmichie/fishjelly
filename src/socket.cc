@@ -117,7 +117,17 @@ bool Socket::readLine(std::string* buffer) {
         c = fgetc(socket_fp);
     }
 
-    if (c == '\n') {
+    // Handle CRLF properly
+    if (c == '\r') {
+        buffer->push_back(c);
+        char next = fgetc(socket_fp);
+        if (next == '\n') {
+            buffer->push_back(next);
+        } else if (next != EOF) {
+            // Put it back if it's not '\n'
+            ungetc(next, socket_fp);
+        }
+    } else if (c == '\n') {
         buffer->push_back(c);
     }
 

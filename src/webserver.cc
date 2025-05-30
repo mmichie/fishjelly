@@ -109,6 +109,7 @@ void controlBreak(int sigNo) {
 struct CommandLineArgs {
     int port;
     bool daemon;
+    int test_requests; // Exit after N requests (0 = run forever)
 };
 
 CommandLineArgs parseCommandLineOptions(int argc, char* argv[]) {
@@ -128,6 +129,12 @@ CommandLineArgs parseCommandLineOptions(int argc, char* argv[]) {
         .default_value(false)
         .implicit_value(true);
 
+    program.add_argument("-t", "--test")
+        .help("test mode: exit after N requests")
+        .default_value(0)
+        .scan<'i', int>()
+        .metavar("N");
+
     try {
         program.parse_args(argc, argv);
     } catch (const std::runtime_error& err) {
@@ -138,7 +145,9 @@ CommandLineArgs parseCommandLineOptions(int argc, char* argv[]) {
 
     // Handle version flag (argparse automatically handles -v/--version)
 
-    return {.port = program.get<int>("--port"), .daemon = program.get<bool>("--daemon")};
+    return {.port = program.get<int>("--port"),
+            .daemon = program.get<bool>("--daemon"),
+            .test_requests = program.get<int>("--test")};
 }
 
 /**
@@ -175,6 +184,7 @@ int main(int argc, char* argv[]) {
     }
 
     Http webserver;
+    webserver.setTestMode(args.test_requests);
 
     createPidFile("fishjelly.pid", pid);
     webserver.start(args.port);
