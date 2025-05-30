@@ -34,6 +34,7 @@ class Socket {
     void bindSocket(int server_port);
 
     void closeSocket();
+    void closeClient(); // Close only the client connection
 
     // Constructor
     Socket(int server_port) : socket_fd(-1), socket_fp(nullptr), accept_fd(-1) {

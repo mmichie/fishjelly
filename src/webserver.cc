@@ -113,21 +113,21 @@ struct CommandLineArgs {
 
 CommandLineArgs parseCommandLineOptions(int argc, char* argv[]) {
     argparse::ArgumentParser program("shelob", GIT_HASH);
-    
+
     program.add_description("A lightweight C++ web server");
     program.add_epilog("Example: shelob -p 8080 -d");
-    
+
     program.add_argument("-p", "--port")
         .help("specify the port to listen on")
         .default_value(8080)
         .scan<'i', int>()
         .metavar("PORT");
-    
+
     program.add_argument("-d", "--daemon")
         .help("run the server in daemon mode")
         .default_value(false)
         .implicit_value(true);
-    
+
     try {
         program.parse_args(argc, argv);
     } catch (const std::runtime_error& err) {
@@ -135,13 +135,10 @@ CommandLineArgs parseCommandLineOptions(int argc, char* argv[]) {
         std::cerr << program;
         std::exit(1);
     }
-    
+
     // Handle version flag (argparse automatically handles -v/--version)
-    
-    return {
-        .port = program.get<int>("--port"),
-        .daemon = program.get<bool>("--daemon")
-    };
+
+    return {.port = program.get<int>("--port"), .daemon = program.get<bool>("--daemon")};
 }
 
 /**

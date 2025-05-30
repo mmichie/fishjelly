@@ -31,11 +31,30 @@ void Socket::closeSocket() {
     if (socket_fp && fclose(socket_fp) != 0) {
         handleError("Failed to close socket file pointer");
     }
-    
+
     if (socket_fd != -1) {
         close(socket_fd);
         socket_fd = -1;
     }
+}
+
+/**
+ * Closes only the client connection, not the server socket.
+ * Used by the parent process after forking.
+ */
+void Socket::closeClient() {
+    if (DEBUG) {
+        std::cout << "Closing client connection" << std::endl;
+    }
+
+    // Only close the client file descriptor in the parent
+    if (accept_fd != -1) {
+        close(accept_fd);
+        accept_fd = -1;
+    }
+
+    // Don't close socket_fp in parent as it was created in child's address space
+    socket_fp = nullptr;
 }
 
 /**
@@ -77,7 +96,7 @@ void Socket::writeLine(std::string_view line) {
     if (accept_fd == -1) {
         return; // No client connected
     }
-    
+
     if (send(accept_fd, line.data(), line.size(), 0) == -1) {
         handleError("Failed to send data");
     }
@@ -90,7 +109,7 @@ bool Socket::readLine(std::string* buffer) {
     if (!socket_fp) {
         return false;
     }
-    
+
     char c = fgetc(socket_fp);
 
     while (c != '\n' && c != EOF && c != '\r') {
