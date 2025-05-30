@@ -82,6 +82,9 @@ asio::awaitable<void> AsioServer::handle_connection(tcp::socket socket) {
             co_return;
         }
         
+        // Provide the request data to the adapter
+        socket_adapter.setRequestData(header);
+        
         // Process the first request
         bool keep_alive = http.parseHeader(header);
         
@@ -104,6 +107,9 @@ asio::awaitable<void> AsioServer::handle_connection(tcp::socket socket) {
                 http.sock.release(); // Don't delete stack object
                 break; // Timeout or connection closed
             }
+            
+            // Provide the request data to the adapter
+            next_adapter.setRequestData(header);
             
             keep_alive = http.parseHeader(header);
             
