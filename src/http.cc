@@ -58,9 +58,9 @@ void Http::printConnectionType(bool keep_alive) {
         return;
 
     if (keep_alive)
-        sock->writeLine("Connection: Keep-Alive\n");
+        sock->writeLine("Connection: keep-alive\r\n");
     else
-        sock->writeLine("Connection: close\n");
+        sock->writeLine("Connection: close\r\n");
 }
 
 /**
@@ -227,6 +227,19 @@ bool Http::parseHeader(std::string_view header) {
 
     // Store method and URI in headermap for backward compatibility
     headermap[method] = uri;
+    
+    // Validate HTTP version
+    if (http_version != "HTTP/1.0" && http_version != "HTTP/1.1") {
+        if (DEBUG) {
+            std::cout << "Unsupported HTTP version: " << http_version << std::endl;
+        }
+        if (sock) {
+            // Send 505 HTTP Version Not Supported
+            sendHeader(505, 0, "text/html", false);
+            sock->writeLine("<html><body>505 HTTP Version Not Supported</body></html>");
+        }
+        return false;
+    }
 
     /* Seperate each request header with the name and value and insert into a
      * hash map */
@@ -280,10 +293,13 @@ bool Http::parseHeader(std::string_view header) {
         return false;
     }
 
-    if (headermap["Connection"] == "keep-alive")
-        keep_alive = true;
-    else
-        keep_alive = false;
+    // Handle Connection header based on HTTP version
+    // HTTP/1.0 defaults to close, HTTP/1.1 defaults to keep-alive
+    if (http_version == "HTTP/1.0") {
+        keep_alive = (headermap["Connection"] == "keep-alive");
+    } else { // HTTP/1.1
+        keep_alive = (headermap["Connection"] != "close");
+    }
 
     // Check if we have a valid request method
     if (headermap.find("GET") == headermap.end() && headermap.find("HEAD") == headermap.end() &&
@@ -292,8 +308,24 @@ bool Http::parseHeader(std::string_view header) {
             std::cout << "No valid request method found in headermap" << std::endl;
         }
         if (sock) {
-            sendHeader(501, 0, "text/html", false);
-            sock->writeLine("<html><body>501 Not Implemented</body></html>");
+            // Send 405 Method Not Allowed with Allow header
+            std::ostringstream headerStream;
+            headerStream << "HTTP/1.1 405 Method Not Allowed\r\n";
+            
+            // Generate date header
+            std::array<char, 50> buf;
+            time_t ltime = time(nullptr);
+            struct tm* today = gmtime(&ltime);
+            strftime(buf.data(), buf.size(), "%a, %d %b %Y %H:%M:%S GMT", today);
+            headerStream << "Date: " << buf.data() << "\r\n";
+            
+            headerStream << "Server: SHELOB/0.5 (Unix)\r\n";
+            headerStream << "Allow: GET, HEAD, POST, OPTIONS\r\n";
+            headerStream << "Content-Length: 0\r\n";
+            headerStream << "Connection: " << (keep_alive ? "keep-alive" : "close") << "\r\n";
+            headerStream << "\r\n";
+            
+            sock->writeLine(headerStream.str());
         }
         return false;
     }
@@ -302,19 +334,20 @@ bool Http::parseHeader(std::string_view header) {
         if (headermap.find("GET") != headermap.end()) {
             processGetRequest(headermap, request_line, keep_alive);
         } else if (headermap.find("HEAD") != headermap.end()) {
-            processHeadRequest(headermap);
+            processHeadRequest(headermap, keep_alive);
         } else if (headermap.find("POST") != headermap.end()) {
-            processPostRequest(headermap);
+            processPostRequest(headermap, keep_alive);
         } else if (headermap.find("OPTIONS") != headermap.end()) {
             processOptionsRequest(headermap, keep_alive);
         }
     }
 
-    return true; // Return true if parsing was successful
+    return keep_alive; // Return keep_alive status for connection handling
 }
 
-void Http::processPostRequest(const std::map<std::string, std::string>& headermap) {
+void Http::processPostRequest(const std::map<std::string, std::string>& headermap, bool keep_alive) {
     (void)headermap; // Suppress unused parameter warning
+    (void)keep_alive; // Suppress unused parameter warning
     if (sock)
         sock->writeLine("yeah right d00d\n");
 }
@@ -342,8 +375,9 @@ void Http::processOptionsRequest(const std::map<std::string, std::string>& heade
 /**
  * Processes an HTTP HEAD request.
  * @param headermap A map containing parsed HTTP headers.
+ * @param keep_alive Whether to keep the connection alive.
  */
-void Http::processHeadRequest(const std::map<std::string, std::string>& headermap) {
+void Http::processHeadRequest(const std::map<std::string, std::string>& headermap, bool keep_alive) {
     auto it = headermap.find("HEAD");
     if (it == headermap.end())
         return;
@@ -380,7 +414,7 @@ void Http::processHeadRequest(const std::map<std::string, std::string>& headerma
     mime.readMimeConfig("mime.types");
 
     // Send header
-    sendHeader(200, size, mime.getMimeFromExtension(filename), false);
+    sendHeader(200, size, mime.getMimeFromExtension(filename), keep_alive);
 }
 
 void Http::processGetRequest(const std::map<std::string, std::string>& headermap,
@@ -493,6 +527,9 @@ void Http::sendHeader(int code, int size, std::string_view file_type, bool keep_
         break;
     case 501:
         headerStream << "HTTP/1.1 501 Not Implemented\r\n";
+        break;
+    case 505:
+        headerStream << "HTTP/1.1 505 HTTP Version Not Supported\r\n";
         break;
     default:
         std::cerr << "Wrong HTTP CODE!" << std::endl;

@@ -27,10 +27,10 @@ class Http {
     void printConnectionType(bool keep_alive = false);
     std::string sanitizeFilename(std::string_view filename);
     void sendFile(std::string_view filename);
-    void processHeadRequest(const std::map<std::string, std::string>& headermap);
+    void processHeadRequest(const std::map<std::string, std::string>& headermap, bool keep_alive);
     void processGetRequest(const std::map<std::string, std::string>& headermap,
                            std::string_view request_line, bool keep_alive);
-    void processPostRequest(const std::map<std::string, std::string>& headermap);
+    void processPostRequest(const std::map<std::string, std::string>& headermap, bool keep_alive);
     void processOptionsRequest(const std::map<std::string, std::string>& headermap, bool keep_alive);
 
     std::string lastHeader; // Store last sent header for testing
