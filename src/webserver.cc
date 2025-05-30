@@ -1,10 +1,10 @@
 #include "webserver.h"
-#include <sys/stat.h>
 #include <csignal>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <optional>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #ifndef GIT_HASH
@@ -16,7 +16,7 @@
  * program.
  * @param message Error message to be displayed.
  */
-void fatalError(const std::string &message) {
+void fatalError(const std::string& message) {
     std::cerr << "Error: " << message << std::endl;
     std::exit(1);
 }
@@ -68,12 +68,11 @@ void initializeDaemon() {
  * @param pid The process ID to write to the PID file.
  * @return True if successful, false otherwise.
  */
-bool createPidFile(const std::string &filename, int pid) {
+bool createPidFile(const std::string& filename, int pid) {
     std::ofstream pidfile(filename, std::ios::out | std::ios::trunc);
 
     if (!pidfile.is_open()) {
-        std::cerr << "Error: Unable to open PID file (" << filename << ")"
-                  << std::endl;
+        std::cerr << "Error: Unable to open PID file (" << filename << ")" << std::endl;
         return false;
     }
 
@@ -118,7 +117,7 @@ void showHelp() {
 /**
  * Parses command line options and returns the specified port if available.
  */
-std::optional<int> parseCommandLineOptions(int argc, char *argv[], bool &daemonMode) {
+std::optional<int> parseCommandLineOptions(int argc, char* argv[], bool& daemonMode) {
     int port;
     int c;
     static const char optstring[] = "hVdp:";
@@ -159,7 +158,7 @@ void setupSignals() {
 /**
  * Entry point for the web server program.
  */
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
     bool daemonMode = false;
 
     const int pid = getpid();

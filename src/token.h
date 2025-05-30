@@ -8,7 +8,7 @@
 
 class Token {
   public:
-    void tokenize(std::string_view str, std::vector<std::string> &tokens,
+    void tokenize(std::string_view str, std::vector<std::string>& tokens,
                   std::string_view delimiters);
 };
 

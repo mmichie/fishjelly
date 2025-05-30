@@ -14,7 +14,6 @@
                            "SERVER_PORT" | "SERVER_PROTOCOL" |
                            "SERVER_SOFTWARE" | scheme |*/
 void Cgi::setupEnv(const std::map<std::string, std::string>& headermap) {
-
     auto auth_it = headermap.find("AUTH_TYPE");
     if (auth_it != headermap.end()) {
         setenv("AUTH_TYPE", auth_it->second.c_str(), 1);
@@ -46,7 +45,7 @@ bool Cgi::executeCGI(std::string_view filename, int accept_fd,
 
     if (pid < 0) {
         perror("ERROR on fork");
-        return false;  // Fork failed, returning false.
+        return false; // Fork failed, returning false.
     }
 
     /* Child */
@@ -70,8 +69,8 @@ bool Cgi::executeCGI(std::string_view filename, int accept_fd,
         execlp(fullpath.c_str(), filename_str.c_str(), nullptr);
 
         perror("CGI error");
-        exit(1);  // If exec fails, terminate the child process.
+        exit(1); // If exec fails, terminate the child process.
     }
 
-    return true;  // Successful execution
+    return true; // Successful execution
 }

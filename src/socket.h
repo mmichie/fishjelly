@@ -14,13 +14,12 @@
 #include "global.h"
 
 class Socket {
-
   private:
     int socket_fd, sin_size;
     struct sockaddr_in server;
     const static int NUM_CLIENTS_TO_QUEUE = 10;
     void serverBind(int server_port);
-    FILE *socket_fp;
+    FILE* socket_fp;
 
   public:
     int accept_fd, pid;
@@ -28,12 +27,11 @@ class Socket {
     struct sockaddr_in client;
 
     void acceptClient();
-    bool readLine(std::string *buffer);
+    bool readLine(std::string* buffer);
     void writeLine(std::string_view line);
     void handleError(std::string_view message);
     void setSocketOptions();
     void bindSocket(int server_port);
-
 
     void closeSocket();
 

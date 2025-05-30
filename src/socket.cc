@@ -8,7 +8,7 @@
  * SocketException class for specialized socket error handling.
  */
 class SocketException : public std::runtime_error {
-public:
+  public:
     SocketException(const std::string& message) : std::runtime_error(message) {}
 };
 
@@ -40,9 +40,8 @@ void Socket::acceptClient() {
     sin_size = sizeof(struct sockaddr_in);
 
     while (true) {
-        accept_fd =
-            accept(socket_fd, reinterpret_cast<struct sockaddr *>(&client),
-                   reinterpret_cast<socklen_t *>(&sin_size));
+        accept_fd = accept(socket_fd, reinterpret_cast<struct sockaddr*>(&client),
+                           reinterpret_cast<socklen_t*>(&sin_size));
 
         if (accept_fd == -1) {
             if (errno == EINTR) {
@@ -56,8 +55,8 @@ void Socket::acceptClient() {
     }
 
     if (DEBUG) {
-        std::cout << "Client accepted from " << inet_ntoa(client.sin_addr)
-                  << "... my pid is " << getpid() << std::endl;
+        std::cout << "Client accepted from " << inet_ntoa(client.sin_addr) << "... my pid is "
+                  << getpid() << std::endl;
     }
 
     socket_fp = fdopen(accept_fd, "r");
@@ -78,7 +77,7 @@ void Socket::writeLine(std::string_view line) {
 /**
  * Reads a line from the socket into the provided buffer.
  */
-bool Socket::readLine(std::string *buffer) {
+bool Socket::readLine(std::string* buffer) {
     char c = fgetc(socket_fp);
 
     while (c != '\n' && c != EOF && c != '\r') {
@@ -111,7 +110,7 @@ void Socket::bindSocket(int server_port) {
     server.sin_port = htons(server_port);
     server.sin_addr.s_addr = INADDR_ANY;
 
-    if (::bind(socket_fd, (struct sockaddr *)&server, sizeof(server)) == -1) {
+    if (::bind(socket_fd, (struct sockaddr*)&server, sizeof(server)) == -1) {
         handleError("Failed to bind socket");
     }
 }

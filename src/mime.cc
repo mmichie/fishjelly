@@ -19,7 +19,6 @@ bool Mime::readMimeConfig(std::string_view filename) {
 
         // if not a comment, process
         if (tmp_line[0] != '#') {
-
             // tokenize the line
             std::string buf;
             std::stringstream ss(tmp_line);
@@ -49,4 +48,3 @@ std::string Mime::getMimeFromExtension(std::string_view filename) {
     else
         return this->mimemap[file_extension];
 }
-

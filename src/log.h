@@ -11,8 +11,8 @@ class Log {
   public:
     bool closeLogFile();
     bool openLogFile(std::string_view filename);
-    bool writeLogLine(std::string_view ip, std::string_view request, int code, int size, std::string_view referrer, std::string_view agent);
-
+    bool writeLogLine(std::string_view ip, std::string_view request, int code, int size,
+                      std::string_view referrer, std::string_view agent);
 
   private:
     std::string makeDate();

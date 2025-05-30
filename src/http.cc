@@ -14,7 +14,7 @@
 void Http::printDate() {
     std::array<char, 50> buf;
     time_t ltime = time(nullptr);
-    struct tm *today = gmtime(&ltime);
+    struct tm* today = gmtime(&ltime);
 
     // Date: Fri, 16 Jul 2004 15:37:18 GMT
     strftime(buf.data(), buf.size(), "%a, %d %b %Y %H:%M:%S GMT", today);
@@ -25,9 +25,7 @@ void Http::printDate() {
 /**
  * Write a RFC 2616 compliant Server header to the client.
  */
-void Http::printServer() {
-    sock->writeLine("Server: SHELOB/0.5 (Unix)\r\n");
-}
+void Http::printServer() { sock->writeLine("Server: SHELOB/0.5 (Unix)\r\n"); }
 
 /**
  * Write a RFC 2616 compliant ContentType header to the client.
@@ -66,7 +64,6 @@ void Http::start(int server_port) {
 
     // Loop to handle clients
     while (1) {
-
         sock->acceptClient();
 
         pid = fork();
@@ -77,7 +74,6 @@ void Http::start(int server_port) {
 
         /* Child */
         if (pid == 0) {
-
             keep_alive = parseHeader(getHeader());
             while (keep_alive) {
                 keep_alive = parseHeader(getHeader());
@@ -96,7 +92,7 @@ void Http::start(int server_port) {
 
 std::string Http::sanitizeFilename(std::string_view filename) {
     std::filesystem::path path;
-    
+
     // Remove leading '/' from filename
     if (!filename.empty() && filename[0] == '/') {
         filename.remove_prefix(1);
@@ -151,7 +147,7 @@ void Http::sendFile(std::string_view filename) {
         std::string s_buffer(buffer.begin(), buffer.end());
         Filter filter;
         filtered = filter.addFooter(s_buffer);
-        
+
         // Send filtered content
         if (send(sock->accept_fd, filtered.data(), filtered.length(), 0) == -1) {
             perror("send");
@@ -234,8 +230,9 @@ void Http::processPostRequest(const std::map<std::string, std::string>& headerma
  */
 void Http::processHeadRequest(const std::map<std::string, std::string>& headermap) {
     auto it = headermap.find("HEAD");
-    if (it == headermap.end()) return;
-    
+    if (it == headermap.end())
+        return;
+
     std::string filename = sanitizeFilename(it->second);
     std::filesystem::path filepath(filename);
     std::string file_extension = filepath.extension().string();
@@ -258,8 +255,7 @@ void Http::processHeadRequest(const std::map<std::string, std::string>& headerma
     log.openLogFile("logs/access_log");
     auto referer_it = headermap.find("Referer");
     auto user_agent_it = headermap.find("User-Agent");
-    log.writeLogLine(inet_ntoa(sock->client.sin_addr), "HEAD " + filename, 200,
-                     size, 
+    log.writeLogLine(inet_ntoa(sock->client.sin_addr), "HEAD " + filename, 200, size,
                      referer_it != headermap.end() ? referer_it->second : "",
                      user_agent_it != headermap.end() ? user_agent_it->second : "");
     log.closeLogFile();
@@ -272,12 +268,12 @@ void Http::processHeadRequest(const std::map<std::string, std::string>& headerma
     sendHeader(200, size, mime.getMimeFromExtension(filename), false);
 }
 
-void Http::processGetRequest(const std::map<std::string, std::string>& headermap, 
-                             std::string_view request_line,
-                             bool keep_alive) {
+void Http::processGetRequest(const std::map<std::string, std::string>& headermap,
+                             std::string_view request_line, bool keep_alive) {
     auto it = headermap.find("GET");
-    if (it == headermap.end()) return;
-    
+    if (it == headermap.end())
+        return;
+
     std::string filename = sanitizeFilename(it->second);
     std::filesystem::path filepath(filename);
     std::string file_extension = filepath.extension().string();
@@ -310,8 +306,7 @@ void Http::processGetRequest(const std::map<std::string, std::string>& headermap
     log.openLogFile("logs/access_log");
     auto referer_it = headermap.find("Referer");
     auto user_agent_it = headermap.find("User-Agent");
-    log.writeLogLine(inet_ntoa(sock->client.sin_addr), 
-                     std::string(request_line), 200, size,
+    log.writeLogLine(inet_ntoa(sock->client.sin_addr), std::string(request_line), 200, size,
                      referer_it != headermap.end() ? referer_it->second : "",
                      user_agent_it != headermap.end() ? user_agent_it->second : "");
     log.closeLogFile();

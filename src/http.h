@@ -19,7 +19,6 @@
 #include "token.h"
 
 class Http {
-
   private:
     void printDate();
     void printServer();
@@ -29,9 +28,8 @@ class Http {
     std::string sanitizeFilename(std::string_view filename);
     void sendFile(std::string_view filename);
     void processHeadRequest(const std::map<std::string, std::string>& headermap);
-    void processGetRequest(const std::map<std::string, std::string>& headermap, 
-                           std::string_view request_line,
-                           bool keep_alive);
+    void processGetRequest(const std::map<std::string, std::string>& headermap,
+                           std::string_view request_line, bool keep_alive);
     void processPostRequest(const std::map<std::string, std::string>& headermap);
 
   public:

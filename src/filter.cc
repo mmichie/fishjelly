@@ -6,7 +6,7 @@
  */
 std::string Filter::addFooter(std::string_view unfiltered) {
     std::string filtered;
-    
+
     auto filter_index = unfiltered.find("</body>");
 
     if (DEBUG) {
@@ -20,11 +20,11 @@ std::string Filter::addFooter(std::string_view unfiltered) {
     if (filter_index != std::string_view::npos) {
         // Copy everything before </body>
         filtered.append(unfiltered.substr(0, filter_index));
-        
+
         // Add footer content
         filtered.append("<hr><p><h1>The spice is vital to space travel.</h1></p>");
         filtered.append("</ul><a href=\"/index.html\">Return to Main Page</a>");
-        
+
         // Add the rest of the original content
         filtered.append(unfiltered.substr(filter_index));
     } else {

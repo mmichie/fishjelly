@@ -1,6 +1,6 @@
 #include "log.h"
-#include <filesystem>
 #include <ctime>
+#include <filesystem>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -49,13 +49,11 @@ std::string Log::makeDate() {
     return oss.str();
 }
 
-bool Log::writeLogLine(std::string_view ip, std::string_view request,
-                       int code, int size, std::string_view referrer,
-                       std::string_view agent) {
+bool Log::writeLogLine(std::string_view ip, std::string_view request, int code, int size,
+                       std::string_view referrer, std::string_view agent) {
     if (logfile.is_open()) {
-        logfile << ip << " - - " << makeDate() << " \"" << request << "\" "
-                << code << ' ' << size << " \"" << referrer << "\" \"" << agent
-                << "\"\n";
+        logfile << ip << " - - " << makeDate() << " \"" << request << "\" " << code << ' ' << size
+                << " \"" << referrer << "\" \"" << agent << "\"\n";
         return true;
     } else {
         std::cerr << "Unable to write to logfile\n";
