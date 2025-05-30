@@ -346,8 +346,20 @@ bool Http::parseHeader(std::string_view header) {
 }
 
 void Http::processPostRequest(const std::map<std::string, std::string>& headermap, bool keep_alive) {
-    (void)headermap; // Suppress unused parameter warning
-    (void)keep_alive; // Suppress unused parameter warning
+    // Check for Content-Length header (required for POST)
+    auto content_length_it = headermap.find("Content-Length");
+    if (content_length_it == headermap.end()) {
+        if (DEBUG) {
+            std::cout << "POST request without Content-Length header" << std::endl;
+        }
+        if (sock) {
+            sendHeader(411, 0, "text/html", keep_alive);
+            sock->writeLine("<html><body>411 Length Required</body></html>");
+        }
+        return;
+    }
+    
+    // TODO: Actually read and process the POST body
     if (sock)
         sock->writeLine("yeah right d00d\n");
 }
@@ -524,6 +536,9 @@ void Http::sendHeader(int code, int size, std::string_view file_type, bool keep_
         break;
     case 404:
         headerStream << "HTTP/1.1 404 Not Found\r\n";
+        break;
+    case 411:
+        headerStream << "HTTP/1.1 411 Length Required\r\n";
         break;
     case 501:
         headerStream << "HTTP/1.1 501 Not Implemented\r\n";
