@@ -40,6 +40,7 @@ executable('shelob',
   'webserver.cc',
   'webserver.h',
   link_with : fishjelly_lib,
+  include_directories : inc,
   cpp_args : [
     '-DGIT_HASH="' + git_hash + '"',
     '-fstack-protector-strong',

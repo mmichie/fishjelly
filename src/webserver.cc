@@ -1,4 +1,5 @@
 #include "webserver.h"
+#include <argparse.hpp>
 #include <csignal>
 #include <filesystem>
 #include <fstream>
@@ -103,46 +104,44 @@ void controlBreak(int sigNo) {
 }
 
 /**
- * Displays the help text.
+ * Parses command line options using argparse.
  */
-void showHelp() {
-    std::cout << "Usage: webserver [options]\n"
-              << "Options:\n"
-              << "  -h, --help       Show this help message and exit\n"
-              << "  -V, --version    Show version information and exit\n"
-              << "  -d, --daemon     Run the server in daemon mode\n"
-              << "  -p, --port PORT  Specify the port to listen on\n";
-}
-
-/**
- * Parses command line options and returns the specified port if available.
- */
-std::optional<int> parseCommandLineOptions(int argc, char* argv[], bool& daemonMode) {
+struct CommandLineArgs {
     int port;
-    int c;
-    static const char optstring[] = "hVdp:";
+    bool daemon;
+};
 
-    while ((c = getopt(argc, argv, optstring)) != -1) {
-        switch (c) {
-        case 'd':
-            daemonMode = true;
-            break;
-        case 'h':
-            showHelp();
-            std::exit(0);
-        case 'V':
-            std::cout << "Webserver Version: " << GIT_HASH << std::endl;
-            std::exit(0);
-        case 'p':
-            port = std::stoi(optarg);
-            return port;
-        case '?':
-            showHelp();
-            std::exit(1);
-        }
+CommandLineArgs parseCommandLineOptions(int argc, char* argv[]) {
+    argparse::ArgumentParser program("shelob", GIT_HASH);
+    
+    program.add_description("A lightweight C++ web server");
+    program.add_epilog("Example: shelob -p 8080 -d");
+    
+    program.add_argument("-p", "--port")
+        .help("specify the port to listen on")
+        .default_value(8080)
+        .scan<'i', int>()
+        .metavar("PORT");
+    
+    program.add_argument("-d", "--daemon")
+        .help("run the server in daemon mode")
+        .default_value(false)
+        .implicit_value(true);
+    
+    try {
+        program.parse_args(argc, argv);
+    } catch (const std::runtime_error& err) {
+        std::cerr << err.what() << std::endl;
+        std::cerr << program;
+        std::exit(1);
     }
-
-    return std::nullopt;
+    
+    // Handle version flag (argparse automatically handles -v/--version)
+    
+    return {
+        .port = program.get<int>("--port"),
+        .daemon = program.get<bool>("--daemon")
+    };
 }
 
 /**
@@ -159,20 +158,13 @@ void setupSignals() {
  * Entry point for the web server program.
  */
 int main(int argc, char* argv[]) {
-    bool daemonMode = false;
-
     const int pid = getpid();
-    auto portOpt = parseCommandLineOptions(argc, argv, daemonMode);
-
-    if (!portOpt.has_value()) {
-        fatalError("Must specify port!");
-    }
+    auto args = parseCommandLineOptions(argc, argv);
 
     // Output the port and PID before potentially going into daemon mode.
-    int port = portOpt.value();
-    std::cout << "Starting on port " << port << " process ID: " << pid << std::endl;
+    std::cout << "Starting on port " << args.port << " process ID: " << pid << std::endl;
 
-    if (daemonMode) {
+    if (args.daemon) {
         initializeDaemon();
     }
 
@@ -188,7 +180,7 @@ int main(int argc, char* argv[]) {
     Http webserver;
 
     createPidFile("fishjelly.pid", pid);
-    webserver.start(port);
+    webserver.start(args.port);
 
     return 0;
 }

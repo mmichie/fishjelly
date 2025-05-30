@@ -11,6 +11,9 @@ project('fishjelly', ['cpp', 'c'],
   ]
 )
 
+# Add third-party includes
+inc = include_directories('third_party')
+
 # Get git hash for embedding
 git = find_program('git', required : false)
 if git.found()
