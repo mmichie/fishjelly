@@ -12,6 +12,8 @@
  * Write a RFC 2616 compliant Date header to the client.
  */
 void Http::printDate() {
+    if (!sock) return;
+    
     std::array<char, 50> buf;
     time_t ltime = time(nullptr);
     struct tm* today = gmtime(&ltime);
@@ -25,13 +27,15 @@ void Http::printDate() {
 /**
  * Write a RFC 2616 compliant Server header to the client.
  */
-void Http::printServer() { sock->writeLine("Server: SHELOB/0.5 (Unix)\r\n"); }
+void Http::printServer() { 
+    if (sock) sock->writeLine("Server: SHELOB/0.5 (Unix)\r\n"); 
+}
 
 /**
  * Write a RFC 2616 compliant ContentType header to the client.
  */
 void Http::printContentType(std::string_view type) {
-    sock->writeLine(std::format("Content-Type: {}\r\n", type));
+    if (sock) sock->writeLine(std::format("Content-Type: {}\r\n", type));
 }
 
 /**
@@ -39,13 +43,15 @@ void Http::printContentType(std::string_view type) {
  */
 void Http::printContentLength(int size) {
     assert(size >= 0);
-    sock->writeLine(std::format("Content-Length: {}\r\n", size));
+    if (sock) sock->writeLine(std::format("Content-Length: {}\r\n", size));
 }
 
 /**
  * Write a RFC 2616 compliant ConnectionType header to the client.
  */
 void Http::printConnectionType(bool keep_alive) {
+    if (!sock) return;
+    
     if (keep_alive)
         sock->writeLine("Connection: Keep-Alive\n");
     else
@@ -174,19 +180,48 @@ bool Http::parseHeader(std::string_view header) {
     /* Seperate the client request headers by newline */
     token.tokenize(header, tokens, "\n");
 
+    if (tokens.empty()) {
+        return false;
+    }
+
     /* The first line of the client request should always be GET, HEAD, POST,
      * etc */
     request_line = tokens[0];
-    token.tokenize(tokens[0], tokentmp, " ");
+    // Remove trailing \r if present
+    if (!request_line.empty() && request_line.back() == '\r') {
+        request_line.pop_back();
+    }
+    
+    token.tokenize(request_line, tokentmp, " ");
+    
+    if (tokentmp.size() < 3) {
+        return false;
+    }
+    
     headermap[tokentmp[0]] = tokentmp[1];
 
     /* Seperate each request header with the name and value and insert into a
      * hash map */
     for (i = 1; i < tokens.size(); i++) {
+        // Skip empty lines
+        if (tokens[i].empty() || tokens[i] == "\r") {
+            continue;
+        }
+        
         std::string::size_type pos = tokens[i].find(':');
         if (pos != std::string::npos) {
             std::string name = tokens[i].substr(0, pos);
-            std::string value = tokens[i].substr(pos + 2, tokens[i].length() - pos);
+            // Skip the colon and any spaces after it
+            std::string::size_type value_start = pos + 1;
+            while (value_start < tokens[i].length() && tokens[i][value_start] == ' ') {
+                value_start++;
+            }
+            
+            std::string value = tokens[i].substr(value_start);
+            // Remove trailing \r if present
+            if (!value.empty() && value.back() == '\r') {
+                value.pop_back();
+            }
 
             headermap[name] = value;
         }
@@ -204,24 +239,32 @@ bool Http::parseHeader(std::string_view header) {
     else
         keep_alive = false;
 
-    if (headermap.size() <= 0) {
+    // Check if we have a valid request method
+    if (headermap.find("GET") == headermap.end() && 
+        headermap.find("HEAD") == headermap.end() && 
+        headermap.find("POST") == headermap.end()) {
+        if (DEBUG) {
+            std::cout << "No valid request method found in headermap" << std::endl;
+        }
         return false;
     }
 
-    if (headermap.find("GET") != headermap.end()) {
-        processGetRequest(headermap, request_line, keep_alive);
-    } else if (headermap.find("HEAD") != headermap.end()) {
-        processHeadRequest(headermap);
-    } else if (headermap.find("POST") != headermap.end()) {
-        processPostRequest(headermap);
+    if (sock) {
+        if (headermap.find("GET") != headermap.end()) {
+            processGetRequest(headermap, request_line, keep_alive);
+        } else if (headermap.find("HEAD") != headermap.end()) {
+            processHeadRequest(headermap);
+        } else if (headermap.find("POST") != headermap.end()) {
+            processPostRequest(headermap);
+        }
     }
 
-    return keep_alive;
+    return true; // Return true if parsing was successful
 }
 
 void Http::processPostRequest(const std::map<std::string, std::string>& headermap) {
     (void)headermap; // Suppress unused parameter warning
-    sock->writeLine("yeah right d00d\n");
+    if (sock) sock->writeLine("yeah right d00d\n");
 }
 
 /**
@@ -326,8 +369,10 @@ void Http::processGetRequest(const std::map<std::string, std::string>& headermap
  * Receive the client's request headers
  */
 std::string Http::getHeader() {
-    std::string clientBuffer;
+    // For testing, return the last header sent
+    if (!sock) return lastHeader;
 
+    std::string clientBuffer;
     // read until EOF, break when done with header
     while ((sock->readLine(&clientBuffer))) {
         if (clientBuffer.find("\n\n") != std::string::npos)
@@ -344,25 +389,39 @@ void Http::sendHeader(int code, int size, std::string_view file_type, bool keep_
     assert(code > 99 && code < 600);
     assert(size >= 0);
 
+    std::ostringstream headerStream;
+    
     switch (code) {
     case 200:
-        sock->writeLine("HTTP/1.1 200 OK\r\n");
+        headerStream << "HTTP/1.1 200 OK\r\n";
         break;
     case 404:
-        sock->writeLine("HTTP/1.1 404 Not Found\r\n");
+        headerStream << "HTTP/1.1 404 Not Found\r\n";
         break;
     default:
         std::cerr << "Wrong HTTP CODE!" << std::endl;
+        headerStream << "HTTP/1.1 500 Internal Server Error\r\n";
     }
 
-    printDate();
-    printServer();
-
+    // Generate date header
+    std::array<char, 50> buf;
+    time_t ltime = time(nullptr);
+    struct tm* today = gmtime(&ltime);
+    strftime(buf.data(), buf.size(), "%a, %d %b %Y %H:%M:%S GMT", today);
+    headerStream << "Date: " << buf.data() << "\r\n";
+    
+    headerStream << "Server: SHELOB/0.5 (Unix)\r\n";
+    
     if (size != 0)
-        printContentLength(size);
-
-    printConnectionType(keep_alive);
-    printContentType(file_type);
-
-    sock->writeLine("\n");
+        headerStream << "Content-Length: " << size << "\r\n";
+    
+    headerStream << "Connection: " << (keep_alive ? "keep-alive" : "close") << "\r\n";
+    headerStream << "Content-Type: " << file_type << "\r\n";
+    headerStream << "\r\n";
+    
+    lastHeader = headerStream.str();
+    
+    if (sock) {
+        sock->writeLine(lastHeader);
+    }
 }

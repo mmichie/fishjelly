@@ -24,3 +24,8 @@ endif
 
 # Add subdirectory for source files
 subdir('src')
+
+# Add tests subdirectory if testing is enabled
+if get_option('enable-tests')
+  subdir('tests')
+endif

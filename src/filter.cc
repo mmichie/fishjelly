@@ -28,8 +28,10 @@ std::string Filter::addFooter(std::string_view unfiltered) {
         // Add the rest of the original content
         filtered.append(unfiltered.substr(filter_index));
     } else {
-        // No </body> found, just return the original
+        // No </body> found, append footer at the end
         filtered = std::string(unfiltered);
+        filtered.append("<hr><p><h1>The spice is vital to space travel.</h1></p>");
+        filtered.append("</ul><a href=\"/index.html\">Return to Main Page</a>");
     }
 
     return filtered;

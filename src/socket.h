@@ -36,7 +36,7 @@ class Socket {
     void closeSocket();
 
     // Constructor
-    Socket(int server_port) {
+    Socket(int server_port) : socket_fd(-1), socket_fp(nullptr), accept_fd(-1) {
         // Bind the port
         serverBind(server_port);
     }

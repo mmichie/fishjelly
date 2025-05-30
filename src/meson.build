@@ -1,7 +1,5 @@
-# Source files
-sources = files(
-  'webserver.cc',
-  'webserver.h',
+# Library sources (without main)
+lib_sources = files(
   'socket.cc',
   'socket.h',
   'http.cc',
@@ -20,19 +18,35 @@ sources = files(
   'mktime.c'
 )
 
-# Build executable with additional flags
-executable('shelob',
-  sources,
+# Create static library for testing
+fishjelly_lib = static_library('fishjelly',
+  lib_sources,
   cpp_args : [
     '-DGIT_HASH="' + git_hash + '"',
     '-fstack-protector-strong',
     '-march=native',
     '-g',
-    '-Wno-error=#warnings'
+    '-Wno-error=#warnings',
+    '-Wno-deprecated-declarations'
   ],
   c_args : [
     '-Wno-shift-negative-value',
     '-Wno-deprecated-non-prototype'
+  ]
+)
+
+# Build executable with main
+executable('shelob',
+  'webserver.cc',
+  'webserver.h',
+  link_with : fishjelly_lib,
+  cpp_args : [
+    '-DGIT_HASH="' + git_hash + '"',
+    '-fstack-protector-strong',
+    '-march=native',
+    '-g',
+    '-Wno-error=#warnings',
+    '-Wno-deprecated-declarations'
   ],
   install : true
 )

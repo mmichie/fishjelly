@@ -28,8 +28,13 @@ void Socket::closeSocket() {
         std::cout << "Closing socket" << std::endl;
     }
 
-    if (fclose(socket_fp) != 0) {
+    if (socket_fp && fclose(socket_fp) != 0) {
         handleError("Failed to close socket file pointer");
+    }
+    
+    if (socket_fd != -1) {
+        close(socket_fd);
+        socket_fd = -1;
     }
 }
 
@@ -69,6 +74,10 @@ void Socket::acceptClient() {
  * Sends a string to the connected client.
  */
 void Socket::writeLine(std::string_view line) {
+    if (accept_fd == -1) {
+        return; // No client connected
+    }
+    
     if (send(accept_fd, line.data(), line.size(), 0) == -1) {
         handleError("Failed to send data");
     }
@@ -78,6 +87,10 @@ void Socket::writeLine(std::string_view line) {
  * Reads a line from the socket into the provided buffer.
  */
 bool Socket::readLine(std::string* buffer) {
+    if (!socket_fp) {
+        return false;
+    }
+    
     char c = fgetc(socket_fp);
 
     while (c != '\n' && c != EOF && c != '\r') {

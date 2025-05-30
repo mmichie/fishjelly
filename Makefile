@@ -99,10 +99,26 @@ help:
 	@echo "  format-check- Check formatting without modifying"
 	@echo "  help        - Show this help message"
 
-# Run tests (placeholder for future test suite)
+# Run tests
 .PHONY: test
 test: build
-	@echo "No tests configured yet"
+	@echo "Running tests..."
+	@cd $(BUILDDIR) && meson test
+
+# Run tests with verbose output
+.PHONY: test-verbose
+test-verbose: build
+	@echo "Running tests (verbose)..."
+	@cd $(BUILDDIR) && meson test -v
+
+# Generate test coverage report
+.PHONY: coverage
+coverage:
+	@echo "Configuring for coverage..."
+	@meson setup $(BUILDDIR) --buildtype=debug -Db_coverage=true --reconfigure
+	@cd $(BUILDDIR) && meson compile && meson test
+	@cd $(BUILDDIR) && ninja coverage
+	@echo "Coverage report generated in $(BUILDDIR)/meson-logs/coveragereport/"
 
 # Configure build type
 .PHONY: debug

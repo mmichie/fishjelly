@@ -31,6 +31,8 @@ class Http {
     void processGetRequest(const std::map<std::string, std::string>& headermap,
                            std::string_view request_line, bool keep_alive);
     void processPostRequest(const std::map<std::string, std::string>& headermap);
+    
+    std::string lastHeader; // Store last sent header for testing
 
   public:
     void sendHeader(int code, int size, std::string_view file_type = "text/plain",
