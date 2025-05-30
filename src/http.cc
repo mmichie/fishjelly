@@ -194,6 +194,14 @@ bool Http::parseHeader(std::string_view header) {
 
     unsigned int i;
 
+    // Handle empty header (connection closed)
+    if (header.empty()) {
+        if (DEBUG) {
+            std::cout << "Empty header received - connection closed by client" << std::endl;
+        }
+        return false;
+    }
+
     Token token;
     /* Seperate the client request headers by newline */
     token.tokenize(header, tokens, "\n");
@@ -213,7 +221,8 @@ bool Http::parseHeader(std::string_view header) {
     token.tokenize(request_line, tokentmp, " ");
 
     if (tokentmp.size() < 3) {
-        if (sock) {
+        // Only send 400 if we actually have a malformed request line (not empty)
+        if (!request_line.empty() && sock) {
             sendHeader(400, 0, "text/html", false);
             sock->writeLine("<html><body>400 Bad Request - Malformed request line</body></html>");
         }

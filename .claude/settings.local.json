@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(meson compile:*)"
+      "Bash(meson compile:*)",
+      "Bash(python3:*)"
     ],
     "deny": []
   }
