@@ -56,13 +56,14 @@ install: build
 .PHONY: run
 run: build
 	@echo "Starting server on port 8080..."
-	@cd $(BUILDDIR) && ./src/shelob -p 8080
+	@echo "Press Ctrl+C to stop the server"
+	@exec ./$(BUILDDIR)/src/shelob -p 8080
 
 # Run the server in daemon mode
 .PHONY: run-daemon
 run-daemon: build
 	@echo "Starting server in daemon mode on port 8080..."
-	@cd $(BUILDDIR) && ./src/shelob -p 8080 -d
+	@./$(BUILDDIR)/src/shelob -p 8080 -d
 
 # Format source code
 .PHONY: format
