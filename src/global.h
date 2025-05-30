@@ -2,6 +2,7 @@
 #define SHELOB_GLOBAL_H 1
 
 #include <cassert>
+#include <iostream>
 
 #if HAVE_CONFIG_H
 #include <config.h>
