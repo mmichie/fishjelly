@@ -1,4 +1,5 @@
 #include "webserver.h"
+#include "asio_server.h"
 #include <argparse.hpp>
 #include <csignal>
 #include <filesystem>
@@ -110,6 +111,7 @@ struct CommandLineArgs {
     int port;
     bool daemon;
     int test_requests; // Exit after N requests (0 = run forever)
+    bool use_asio;     // Use ASIO instead of fork model
 };
 
 CommandLineArgs parseCommandLineOptions(int argc, char* argv[]) {
@@ -135,6 +137,11 @@ CommandLineArgs parseCommandLineOptions(int argc, char* argv[]) {
         .scan<'i', int>()
         .metavar("N");
 
+    program.add_argument("-a", "--asio")
+        .help("use ASIO coroutines instead of fork model")
+        .default_value(false)
+        .implicit_value(true);
+
     try {
         program.parse_args(argc, argv);
     } catch (const std::runtime_error& err) {
@@ -147,7 +154,8 @@ CommandLineArgs parseCommandLineOptions(int argc, char* argv[]) {
 
     return {.port = program.get<int>("--port"),
             .daemon = program.get<bool>("--daemon"),
-            .test_requests = program.get<int>("--test")};
+            .test_requests = program.get<int>("--test"),
+            .use_asio = program.get<bool>("--asio")};
 }
 
 /**
@@ -183,11 +191,18 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    Http webserver;
-    webserver.setTestMode(args.test_requests);
-
     createPidFile("fishjelly.pid", pid);
-    webserver.start(args.port);
+
+    if (args.use_asio) {
+        // Use ASIO-based server
+        AsioServer server(args.port, args.test_requests);
+        server.run();
+    } else {
+        // Use traditional fork-based server
+        Http webserver;
+        webserver.setTestMode(args.test_requests);
+        webserver.start(args.port);
+    }
 
     return 0;
 }

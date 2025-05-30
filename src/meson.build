@@ -15,12 +15,18 @@ lib_sources = files(
   'cgi.cc',
   'cgi.h',
   'global.h',
-  'mktime.c'
+  'mktime.c',
+  'asio_server.cc',
+  'asio_server.h',
+  'asio_http_connection.cc',
+  'asio_http_connection.h',
+  'http_output_interface.h'
 )
 
 # Create static library for testing
 fishjelly_lib = static_library('fishjelly',
   lib_sources,
+  dependencies : boost_dep,
   cpp_args : [
     '-DGIT_HASH="' + git_hash + '"',
     '-fstack-protector-strong',
@@ -40,6 +46,7 @@ executable('shelob',
   'webserver.cc',
   'webserver.h',
   link_with : fishjelly_lib,
+  dependencies : boost_dep,
   include_directories : inc,
   cpp_args : [
     '-DGIT_HASH="' + git_hash + '"',

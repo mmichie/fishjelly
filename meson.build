@@ -14,6 +14,12 @@ project('fishjelly', ['cpp', 'c'],
 # Add third-party includes
 inc = include_directories('third_party')
 
+# Find Boost dependencies
+boost_dep = dependency('boost', 
+  modules : ['system', 'coroutine'],
+  required : true
+)
+
 # Get git hash for embedding
 git = find_program('git', required : false)
 if git.found()
