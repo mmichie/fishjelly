@@ -32,6 +32,8 @@ class Http {
                            std::string_view request_line, bool keep_alive);
     void processPostRequest(const std::map<std::string, std::string>& headermap, bool keep_alive);
     void processOptionsRequest(const std::map<std::string, std::string>& headermap, bool keep_alive);
+    time_t parseHttpDate(const std::string& date_str);
+    bool isModifiedSince(const std::string& filename, time_t since_time);
 
     std::string lastHeader; // Store last sent header for testing
     int test_requests = 0;  // Exit after N requests (0 = run forever)

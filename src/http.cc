@@ -7,6 +7,54 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <sys/stat.h>
+
+/**
+ * Parse HTTP date format (RFC 2616)
+ * Example: "Wed, 01 Jan 2025 00:00:00 GMT"
+ */
+time_t Http::parseHttpDate(const std::string& date_str) {
+    struct tm tm = {};
+    // Try to parse the date string
+    if (strptime(date_str.c_str(), "%a, %d %b %Y %H:%M:%S GMT", &tm) == nullptr) {
+        return 0; // Return epoch on parse failure
+    }
+    // Set DST flag to -1 to let mktime determine it
+    tm.tm_isdst = -1;
+    
+    // Save current timezone
+    char* tz = getenv("TZ");
+    std::string old_tz;
+    if (tz) old_tz = tz;
+    
+    // Set timezone to UTC
+    setenv("TZ", "UTC", 1);
+    tzset();
+    
+    // Convert to time_t
+    time_t result = mktime(&tm);
+    
+    // Restore original timezone
+    if (old_tz.empty()) {
+        unsetenv("TZ");
+    } else {
+        setenv("TZ", old_tz.c_str(), 1);
+    }
+    tzset();
+    
+    return result;
+}
+
+/**
+ * Check if a file has been modified since the given time
+ */
+bool Http::isModifiedSince(const std::string& filename, time_t since_time) {
+    struct stat file_stat;
+    if (stat(filename.c_str(), &file_stat) != 0) {
+        return true; // If we can't stat the file, assume it's modified
+    }
+    return file_stat.st_mtime > since_time;
+}
 
 /**
  * Write a RFC 2616 compliant Date header to the client.
@@ -416,6 +464,17 @@ void Http::processHeadRequest(const std::map<std::string, std::string>& headerma
         return;
     }
 
+    // Check If-Modified-Since header
+    auto if_modified_since_it = headermap.find("If-Modified-Since");
+    if (if_modified_since_it != headermap.end()) {
+        time_t since_time = parseHttpDate(if_modified_since_it->second);
+        if (since_time > 0 && !isModifiedSince(filename, since_time)) {
+            // File has not been modified, send 304
+            sendHeader(304, 0, "", keep_alive);
+            return;
+        }
+    }
+
     // Determine File Size
     file.seekg(0, std::ios::end);
     auto size = file.tellg();
@@ -458,6 +517,17 @@ void Http::processGetRequest(const std::map<std::string, std::string>& headermap
                         "found</body></html>");
         // sock->closeSocket();
         return;
+    }
+
+    // Check If-Modified-Since header
+    auto if_modified_since_it = headermap.find("If-Modified-Since");
+    if (if_modified_since_it != headermap.end()) {
+        time_t since_time = parseHttpDate(if_modified_since_it->second);
+        if (since_time > 0 && !isModifiedSince(filename, since_time)) {
+            // File has not been modified, send 304
+            sendHeader(304, 0, "", keep_alive);
+            return;
+        }
     }
 
     // Determine File Size
@@ -539,6 +609,9 @@ void Http::sendHeader(int code, int size, std::string_view file_type, bool keep_
     switch (code) {
     case 200:
         headerStream << "HTTP/1.1 200 OK\r\n";
+        break;
+    case 304:
+        headerStream << "HTTP/1.1 304 Not Modified\r\n";
         break;
     case 400:
         headerStream << "HTTP/1.1 400 Bad Request\r\n";

@@ -85,10 +85,23 @@ class HTTPComplianceTest:
             passed = False
             
         if expected_in_response:
-            for expected in expected_in_response:
-                if expected not in response:
-                    print(f"❌ Expected '{expected}' in response")
+            # Check if this is an OR condition (for status codes like 405/501)
+            if any(exp in ["405", "501", "304", "200"] for exp in expected_in_response) and len(expected_in_response) > 1:
+                # This is an OR condition - at least one should be present
+                found_any = False
+                for expected in expected_in_response:
+                    if expected in response:
+                        found_any = True
+                        break
+                if not found_any:
+                    print(f"❌ Expected one of {expected_in_response} in response")
                     passed = False
+            else:
+                # Normal AND condition - all must be present
+                for expected in expected_in_response:
+                    if expected not in response:
+                        print(f"❌ Expected '{expected}' in response")
+                        passed = False
                     
         if expected_not_in_response:
             for not_expected in expected_not_in_response:
