@@ -27,9 +27,10 @@ class Socket {
     struct sockaddr_in client;
 
     void acceptClient();
-    bool readLine(std::string* buffer);
+    virtual bool readLine(std::string* buffer);
     bool readLineWithTimeout(std::string* buffer, int timeout_seconds);
-    void writeLine(std::string_view line);
+    virtual void writeLine(std::string_view line);
+    virtual int writeRaw(const char* data, size_t size); // Returns bytes written or -1 on error
     void handleError(std::string_view message);
     void setSocketOptions();
     void bindSocket(int server_port);
@@ -40,8 +41,13 @@ class Socket {
     // Constructor
     Socket(int server_port) : socket_fd(-1), socket_fp(nullptr), accept_fd(-1) {
         // Bind the port
-        serverBind(server_port);
+        if (server_port > 0) {
+            serverBind(server_port);
+        }
     }
+    
+    // Virtual destructor
+    virtual ~Socket() = default;
 };
 
 #endif /* !SHELOB_SOCKET_H */

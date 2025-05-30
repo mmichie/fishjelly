@@ -3,7 +3,8 @@
     "allow": [
       "Bash(meson compile:*)",
       "Bash(python3:*)",
-      "Bash(make:*)"
+      "Bash(make:*)",
+      "Bash(ninja:*)"
     ],
     "deny": []
   }

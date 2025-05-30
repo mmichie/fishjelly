@@ -104,6 +104,16 @@ void Socket::writeLine(std::string_view line) {
 }
 
 /**
+ * Writes raw data to the socket.
+ */
+int Socket::writeRaw(const char* data, size_t size) {
+    if (accept_fd < 0) {
+        return -1;
+    }
+    return send(accept_fd, data, size, 0);
+}
+
+/**
  * Reads a line from the socket into the provided buffer.
  */
 bool Socket::readLine(std::string* buffer) {

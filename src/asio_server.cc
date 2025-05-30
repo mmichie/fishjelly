@@ -1,5 +1,6 @@
 #include "asio_server.h"
 #include "http.h"
+#include "asio_socket_adapter.h"
 #include <iostream>
 #include <chrono>
 #include <boost/asio/experimental/awaitable_operators.hpp>
@@ -65,25 +66,58 @@ asio::awaitable<void> AsioServer::listener() {
 
 asio::awaitable<void> AsioServer::handle_connection(tcp::socket socket) {
     try {
+        // Get client endpoint for logging
+        auto client_endpoint = socket.remote_endpoint();
+        
+        // Create socket adapter
+        AsioSocketAdapter socket_adapter(&socket, client_endpoint);
+        
+        // Create HTTP handler with the adapter
+        Http http;
+        http.sock = std::unique_ptr<Socket>(&socket_adapter);
+        
         // First request doesn't use timeout
         std::string header = co_await read_http_request(socket, false);
         if (header.empty()) {
             co_return;
         }
         
-        // For now, send a simple response to test the ASIO infrastructure
-        // TODO: Integrate full HTTP handler
-        std::string response = 
-            "HTTP/1.1 200 OK\r\n"
-            "Date: Fri, 30 May 2025 21:00:00 GMT\r\n"
-            "Server: SHELOB/0.5 (ASIO)\r\n"
-            "Content-Length: 44\r\n"
-            "Connection: close\r\n"
-            "Content-Type: text/html\r\n"
-            "\r\n"
-            "<html><body>Hello from ASIO!</body></html>\n";
+        // Process the first request
+        bool keep_alive = http.parseHeader(header);
         
-        co_await write_response(socket, response);
+        // Send the response
+        std::string response = socket_adapter.getResponse();
+        if (!response.empty()) {
+            co_await write_response(socket, response);
+        }
+        
+        // Handle keep-alive
+        while (keep_alive && !stopping_) {
+            // Create new adapter for next request
+            AsioSocketAdapter next_adapter(&socket, client_endpoint);
+            http.sock.release(); // Release the previous adapter
+            http.sock = std::unique_ptr<Socket>(&next_adapter);
+            
+            // Subsequent requests use timeout
+            header = co_await read_http_request(socket, true);
+            if (header.empty()) {
+                http.sock.release(); // Don't delete stack object
+                break; // Timeout or connection closed
+            }
+            
+            keep_alive = http.parseHeader(header);
+            
+            // Send the response
+            response = next_adapter.getResponse();
+            if (!response.empty()) {
+                co_await write_response(socket, response);
+            }
+        }
+        
+        // Don't delete the adapter if we didn't break out of the loop
+        if (http.sock) {
+            http.sock.release();
+        }
         
         // Increment request count for test mode
         int count = ++request_count_;

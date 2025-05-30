@@ -20,7 +20,9 @@ lib_sources = files(
   'asio_server.h',
   'asio_http_connection.cc',
   'asio_http_connection.h',
-  'http_output_interface.h'
+  'http_output_interface.h',
+  'asio_socket_adapter.cc',
+  'asio_socket_adapter.h'
 )
 
 # Create static library for testing

@@ -228,12 +228,12 @@ void Http::sendFile(std::string_view filename) {
         filtered = filter.addFooter(s_buffer);
 
         // Send filtered content
-        if (send(sock->accept_fd, filtered.data(), filtered.length(), 0) == -1) {
+        if (sock->writeRaw(filtered.data(), filtered.length()) == -1) {
             perror("send");
         }
     } else {
         // Send raw buffer
-        if (send(sock->accept_fd, buffer.data(), buffer.size(), 0) == -1) {
+        if (sock->writeRaw(buffer.data(), buffer.size()) == -1) {
             perror("send");
         }
     }
