@@ -1,22 +1,19 @@
 #ifndef SHELOB_MIME_H
 #define SHELOB_MIME_H 1
 
-#include <fstream>
-#include <iostream>
 #include <map>
-#include <sstream>
 #include <string>
-#include <vector>
+#include <string_view>
 
 #include "global.h"
 
 class Mime {
   public:
-    bool readMimeConfig(string filename);
-    string getMimeFromExtension(string filename);
+    bool readMimeConfig(std::string_view filename);
+    std::string getMimeFromExtension(std::string_view filename);
 
   private:
-    map<string, string> mimemap;
+    std::map<std::string, std::string> mimemap;
 };
 
 #endif /* !SHELOB_MIME_H */

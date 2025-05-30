@@ -66,5 +66,13 @@ The server operates from the `base/` directory which contains:
 - Uses Meson build system
 - Embeds Git commit hash during compilation
 - Strict compilation flags: `-Wall -Wextra -Werror`
-- C++17 standard with optimization flags
+- C++23 standard with optimization flags
 - Code formatting: 4-space indentation (see .clang-format)
+- Modern C++ features:
+  - `std::unique_ptr` for Socket ownership
+  - `std::string_view` for read-only string parameters
+  - `std::filesystem` for path operations
+  - `std::vector` for dynamic buffers
+  - `std::format` for string formatting (C++23)
+  - Range-based for loops
+  - Structured bindings

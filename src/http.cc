@@ -1,42 +1,39 @@
 #include "http.h"
+#include <array>
+#include <chrono>
 #include <cstring>
+#include <filesystem>
+#include <format>
+#include <fstream>
+#include <iostream>
+#include <sstream>
 
 /**
  * Write a RFC 2616 compliant Date header to the client.
  */
-void Http::printDate(void) {
-    ostringstream date;
-
-    char buf[50];
-    time_t ltime;
-    struct tm *today;
-    ltime = time(NULL);
-    today = gmtime(&ltime);
+void Http::printDate() {
+    std::array<char, 50> buf;
+    time_t ltime = time(nullptr);
+    struct tm *today = gmtime(&ltime);
 
     // Date: Fri, 16 Jul 2004 15:37:18 GMT
-    strftime(buf, sizeof(buf), "%a, %d %b %Y %H:%M:%S GMT", today);
+    strftime(buf.data(), buf.size(), "%a, %d %b %Y %H:%M:%S GMT", today);
 
-    date << "Date: " << buf << "\r\n";
-
-    sock->writeLine(date.str());
+    sock->writeLine(std::format("Date: {}\r\n", buf.data()));
 }
 
 /**
  * Write a RFC 2616 compliant Server header to the client.
  */
-void Http::printServer(void) {
-    // sock->writeLine("Server: Shelob - Server for HTTP enviroment and Logging
-    // Outgoing Bits (Unix)\n");
+void Http::printServer() {
     sock->writeLine("Server: SHELOB/0.5 (Unix)\r\n");
 }
 
 /**
  * Write a RFC 2616 compliant ContentType header to the client.
  */
-void Http::printContentType(string type) {
-    ostringstream typebuffer;
-    typebuffer << "Content-Type: " << type << "\r\n";
-    sock->writeLine(typebuffer.str());
+void Http::printContentType(std::string_view type) {
+    sock->writeLine(std::format("Content-Type: {}\r\n", type));
 }
 
 /**
@@ -44,11 +41,7 @@ void Http::printContentType(string type) {
  */
 void Http::printContentLength(int size) {
     assert(size >= 0);
-
-    ostringstream clbuffer;
-    clbuffer << "Content-Length: " << size << "\r\n";
-
-    sock->writeLine(clbuffer.str());
+    sock->writeLine(std::format("Content-Length: {}\r\n", size));
 }
 
 /**
@@ -69,7 +62,7 @@ void Http::start(int server_port) {
 
     bool keep_alive = false;
     int pid;
-    sock = new Socket(server_port);
+    sock = std::make_unique<Socket>(server_port);
 
     // Loop to handle clients
     while (1) {
@@ -91,7 +84,6 @@ void Http::start(int server_port) {
             }
 
             sock->closeSocket();
-            // delete sock;
             exit(0);
         }
 
@@ -100,101 +92,83 @@ void Http::start(int server_port) {
             sock->closeSocket();
         }
     }
-
-    delete sock;
 }
 
-string Http::sanitizeFilename(string filename) {
+std::string Http::sanitizeFilename(std::string_view filename) {
+    std::filesystem::path path;
+    
     // Remove leading '/' from filename
-    filename = filename.substr(1, filename.size()).c_str();
+    if (!filename.empty() && filename[0] == '/') {
+        filename.remove_prefix(1);
+    }
 
     // Default page
-    if (filename == "")
-        filename = "index.html";
+    if (filename.empty()) {
+        path = "htdocs/index.html";
+    } else {
+        // Remove any trailing newlines
+        auto pos = filename.find('\n');
+        if (pos != std::string_view::npos) {
+            filename = filename.substr(0, pos);
+        }
+        path = std::filesystem::path("htdocs") / filename;
+    }
 
-    filename.insert(0, "htdocs/");
-
-    // Remove any trailing newlines
-    std::string::size_type pos = filename.find('\n');
-    if (pos != std::string::npos)
-        filename.erase(pos);
-
-    return filename;
+    return path.string();
 }
 
 /**
  * Sends a file down an open socket.
  */
-void Http::sendFile(string filename) {
+void Http::sendFile(std::string_view filename) {
     // Open file
-    ifstream file(filename.c_str(), ios::in | ios::binary);
-
-    // Find the extension (assumes the extension is whatever follows the last
-    // '.')
-    string file_extension =
-        filename.substr(filename.rfind("."), filename.length());
-
-    // Determine File Size
-    unsigned long size;
-
-    file.seekg(0, ios::end);
-    size = file.tellg();
-
-    // Allocate buffer large enough to read entire file
-    char *buffer;
-    buffer = new char[size + 1];
-    if (buffer == NULL) {
-        cerr << "Error allocating buffer!" << endl;
-        file.close();
+    std::ifstream file(filename.data(), std::ios::in | std::ios::binary);
+    if (!file) {
+        std::cerr << "Error opening file: " << filename << std::endl;
         return;
     }
 
-    // Go to beginning of file and read it in
-    file.seekg(0, ios::beg);
-    file.read(buffer, size);
+    // Find the extension using filesystem
+    std::filesystem::path filepath(filename);
+    std::string file_extension = filepath.extension().string();
 
-    if (file.gcount() != static_cast<streamsize>(size)) {
-        cerr << "Error with read!" << endl;
-        file.close();
+    // Determine File Size
+    file.seekg(0, std::ios::end);
+    auto size = file.tellg();
+    file.seekg(0, std::ios::beg);
+
+    // Read entire file into vector
+    std::vector<char> buffer(size);
+    if (!file.read(buffer.data(), size)) {
+        std::cerr << "Error reading file!" << std::endl;
         return;
     }
 
     // Text manipulate contents of .shtml
-    string filtered;
+    std::string filtered;
     if (file_extension == ".shtml" || file_extension == ".shtm") {
-        buffer[size] = 0;
         // Add the footer
-        string s_buffer(buffer);
+        std::string s_buffer(buffer.begin(), buffer.end());
         Filter filter;
-
         filtered = filter.addFooter(s_buffer);
-        size = filtered.length();
-    }
-
-    // Something of a hack FIXME if time permits
-    //	sock->writeLine(buffer);
-    if (file_extension == ".shtml" || file_extension == ".shtm") {
-        if (send(sock->accept_fd, filtered.data(), size, 0) == -1) {
-            perror("writeLine");
-            // return (-1);
+        
+        // Send filtered content
+        if (send(sock->accept_fd, filtered.data(), filtered.length(), 0) == -1) {
+            perror("send");
         }
     } else {
-        if (send(sock->accept_fd, buffer, size, 0) == -1) {
-            perror("writeLine");
-            // return (-1);
+        // Send raw buffer
+        if (send(sock->accept_fd, buffer.data(), buffer.size(), 0) == -1) {
+            perror("send");
         }
     }
-
-    // cleanup
-    file.close();
-    delete[] buffer;
 }
 
-bool Http::parseHeader(string header) {
-    string request_line;
+bool Http::parseHeader(std::string_view header) {
+    std::string request_line;
 
-    vector<string> tokens, tokentmp;
-    map<string, string> headermap;
+    std::vector<std::string> tokens, tokentmp;
+    std::map<std::string, std::string> headermap;
 
     bool keep_alive = false;
 
@@ -210,14 +184,13 @@ bool Http::parseHeader(string header) {
     token.tokenize(tokens[0], tokentmp, " ");
     headermap[tokentmp[0]] = tokentmp[1];
 
-    string name, value;
     /* Seperate each request header with the name and value and insert into a
      * hash map */
     for (i = 1; i < tokens.size(); i++) {
         std::string::size_type pos = tokens[i].find(':');
         if (pos != std::string::npos) {
-            name = tokens[i].substr(0, pos);
-            value = tokens[i].substr(pos + 2, tokens[i].length() - pos);
+            std::string name = tokens[i].substr(0, pos);
+            std::string value = tokens[i].substr(pos + 2, tokens[i].length() - pos);
 
             headermap[name] = value;
         }
@@ -225,9 +198,8 @@ bool Http::parseHeader(string header) {
 
     /* Print all pairs of the header hash map to console */
     if (DEBUG) {
-        map<string, string>::iterator iter;
-        for (iter = headermap.begin(); iter != headermap.end(); iter++) {
-            cout << iter->first << " : " << iter->second << endl;
+        for (const auto& [key, value] : headermap) {
+            std::cout << key << " : " << value << std::endl;
         }
     }
 
@@ -251,7 +223,7 @@ bool Http::parseHeader(string header) {
     return keep_alive;
 }
 
-void Http::processPostRequest(map<string, string> headermap) {
+void Http::processPostRequest(const std::map<std::string, std::string>& headermap) {
     (void)headermap; // Suppress unused parameter warning
     sock->writeLine("yeah right d00d\n");
 }
@@ -260,18 +232,16 @@ void Http::processPostRequest(map<string, string> headermap) {
  * Processes an HTTP HEAD request.
  * @param headermap A map containing parsed HTTP headers.
  */
-void Http::processHeadRequest(map<string, string> headermap) {
-    string filename = headermap["HEAD"];
-    string file_extension;
-
-    filename = sanitizeFilename(filename);
+void Http::processHeadRequest(const std::map<std::string, std::string>& headermap) {
+    auto it = headermap.find("HEAD");
+    if (it == headermap.end()) return;
+    
+    std::string filename = sanitizeFilename(it->second);
+    std::filesystem::path filepath(filename);
+    std::string file_extension = filepath.extension().string();
 
     // Open file
-    ifstream file(filename.c_str(), ios::in | ios::binary);
-
-    // Find the extension (assumes the extension is whatever follows the last
-    // '.')
-    file_extension = filename.substr(filename.rfind("."), filename.length());
+    std::ifstream file(filename, std::ios::in | std::ios::binary);
 
     // Can't find the file, send 404 header
     if (!file.is_open()) {
@@ -280,15 +250,18 @@ void Http::processHeadRequest(map<string, string> headermap) {
     }
 
     // Determine File Size
-    unsigned long size;
-    file.seekg(0, ios::end);
-    size = file.tellg();
+    file.seekg(0, std::ios::end);
+    auto size = file.tellg();
 
     // TODO: Optimize Log to be a singleton
     Log log;
     log.openLogFile("logs/access_log");
+    auto referer_it = headermap.find("Referer");
+    auto user_agent_it = headermap.find("User-Agent");
     log.writeLogLine(inet_ntoa(sock->client.sin_addr), "HEAD " + filename, 200,
-                     size, headermap["Referer"], headermap["User-Agent"]);
+                     size, 
+                     referer_it != headermap.end() ? referer_it->second : "",
+                     user_agent_it != headermap.end() ? user_agent_it->second : "");
     log.closeLogFile();
 
     // TODO: Optimize Mime to be a singleton
@@ -299,19 +272,18 @@ void Http::processHeadRequest(map<string, string> headermap) {
     sendHeader(200, size, mime.getMimeFromExtension(filename), false);
 }
 
-void Http::processGetRequest(map<string, string> headermap, string request_line,
+void Http::processGetRequest(const std::map<std::string, std::string>& headermap, 
+                             std::string_view request_line,
                              bool keep_alive) {
-    string filename = headermap["GET"];
-    string file_extension;
-
-    filename = sanitizeFilename(filename);
+    auto it = headermap.find("GET");
+    if (it == headermap.end()) return;
+    
+    std::string filename = sanitizeFilename(it->second);
+    std::filesystem::path filepath(filename);
+    std::string file_extension = filepath.extension().string();
 
     // Open file
-    ifstream file(filename.c_str(), ios::in | ios::binary);
-
-    // Find the extension (assumes the extension is whatever follows the last
-    // '.')
-    file_extension = filename.substr(filename.rfind("."), filename.length());
+    std::ifstream file(filename, std::ios::in | std::ios::binary);
 
     // can't find file, 404 it
     if (!file.is_open()) {
@@ -323,10 +295,8 @@ void Http::processGetRequest(map<string, string> headermap, string request_line,
     }
 
     // Determine File Size
-    unsigned long size;
-
-    file.seekg(0, ios::end);
-    size = file.tellg();
+    file.seekg(0, std::ios::end);
+    auto size = file.tellg();
 
     if (file_extension == ".sh") {
         Cgi cgi;
@@ -338,8 +308,12 @@ void Http::processGetRequest(map<string, string> headermap, string request_line,
     // TODO: optimize Log to be a singleton
     Log log;
     log.openLogFile("logs/access_log");
-    log.writeLogLine(inet_ntoa(sock->client.sin_addr), request_line, 200, size,
-                     headermap["Referer"], headermap["User-Agent"]);
+    auto referer_it = headermap.find("Referer");
+    auto user_agent_it = headermap.find("User-Agent");
+    log.writeLogLine(inet_ntoa(sock->client.sin_addr), 
+                     std::string(request_line), 200, size,
+                     referer_it != headermap.end() ? referer_it->second : "",
+                     user_agent_it != headermap.end() ? user_agent_it->second : "");
     log.closeLogFile();
 
     // TODO: optimize Mime to be a singleton
@@ -356,12 +330,12 @@ void Http::processGetRequest(map<string, string> headermap, string request_line,
 /**
  * Receive the client's request headers
  */
-string Http::getHeader() {
-    string clientBuffer;
+std::string Http::getHeader() {
+    std::string clientBuffer;
 
     // read until EOF, break when done with header
     while ((sock->readLine(&clientBuffer))) {
-        if (strstr(clientBuffer.c_str(), "\n\n") != NULL)
+        if (clientBuffer.find("\n\n") != std::string::npos)
             break;
     }
 
@@ -371,7 +345,7 @@ string Http::getHeader() {
 /**
  * Send HTTP headers to the client
  */
-void Http::sendHeader(int code, int size, string file_type, bool keep_alive) {
+void Http::sendHeader(int code, int size, std::string_view file_type, bool keep_alive) {
     assert(code > 99 && code < 600);
     assert(size >= 0);
 
@@ -383,7 +357,7 @@ void Http::sendHeader(int code, int size, string file_type, bool keep_alive) {
         sock->writeLine("HTTP/1.1 404 Not Found\r\n");
         break;
     default:
-        cerr << "Wrong HTTP CODE!" << endl;
+        std::cerr << "Wrong HTTP CODE!" << std::endl;
     }
 
     printDate();

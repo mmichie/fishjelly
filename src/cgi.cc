@@ -1,4 +1,7 @@
 #include "cgi.h"
+#include <filesystem>
+#include <iostream>
+#include <sstream>
 
 /* See: http://www.ietf.org/rfc/rfc3875 */
 /* meta-variable-name = "AUTH_TYPE" | "CONTENT_LENGTH" |
@@ -10,20 +13,23 @@
                            "SCRIPT_NAME" | "SERVER_NAME" |
                            "SERVER_PORT" | "SERVER_PROTOCOL" |
                            "SERVER_SOFTWARE" | scheme |*/
-void Cgi::setupEnv(map<string, string> headermap) {
+void Cgi::setupEnv(const std::map<std::string, std::string>& headermap) {
 
-    if (headermap.find("AUTH_TYPE") != headermap.end()) {
-        setenv("AUTH_TYPE", headermap["AUTH_TYPE"].c_str(), 1);
+    auto auth_it = headermap.find("AUTH_TYPE");
+    if (auth_it != headermap.end()) {
+        setenv("AUTH_TYPE", auth_it->second.c_str(), 1);
     }
 
-    if (headermap.find("CONTENT_LENGTH") != headermap.end()) {
-        setenv("CONTENT_LENGTH", headermap["CONTENT_LENGTH"].c_str(), 1);
+    auto content_len_it = headermap.find("CONTENT_LENGTH");
+    if (content_len_it != headermap.end()) {
+        setenv("CONTENT_LENGTH", content_len_it->second.c_str(), 1);
     }
 
     setenv("GATEWAY_INTERFACE", "CGI/1.1", 1);
 
-    if (headermap.find("QUERY_STRING") != headermap.end()) {
-        setenv("QUERY_STRING", headermap["QUERY_STRING"].c_str(), 1);
+    auto query_it = headermap.find("QUERY_STRING");
+    if (query_it != headermap.end()) {
+        setenv("QUERY_STRING", query_it->second.c_str(), 1);
     }
 
     setenv("REQUEST_METHOD", "GET", 1);
@@ -31,11 +37,9 @@ void Cgi::setupEnv(map<string, string> headermap) {
     setenv("SERVER_SOFTWARE", "SHELOB/3.14", 1);
 }
 
-bool Cgi::executeCGI(std::string filename, int accept_fd,
-                     std::map<std::string, std::string> headermap) {
+bool Cgi::executeCGI(std::string_view filename, int accept_fd,
+                     const std::map<std::string, std::string>& headermap) {
     int pid;
-    char current_path[MAXPATHLEN];
-    std::ostringstream buffer;
     std::string fullpath;
 
     pid = fork();
@@ -51,19 +55,19 @@ bool Cgi::executeCGI(std::string filename, int accept_fd,
 
         dup2(accept_fd, STDOUT_FILENO);
 
-        filename = filename.substr(7);
+        std::string filename_str(filename.substr(7));
         printf("HTTP/1.1 200 OK\r\n");
 
-        if (getcwd(current_path, MAXPATHLEN) == nullptr) {
-            perror("getcwd failed");
-            exit(1);  // Terminate the child process
+        try {
+            auto current_path = std::filesystem::current_path();
+            fullpath = (current_path / "htdocs" / filename_str).string();
+        } catch (const std::filesystem::filesystem_error& e) {
+            std::cerr << "Filesystem error: " << e.what() << std::endl;
+            exit(1);
         }
 
-        buffer << current_path << "/htdocs/" << filename;
-        fullpath = buffer.str();
-
         // Added nullptr as sentinel
-        execlp(fullpath.c_str(), filename.c_str(), nullptr);
+        execlp(fullpath.c_str(), filename_str.c_str(), nullptr);
 
         perror("CGI error");
         exit(1);  // If exec fails, terminate the child process.

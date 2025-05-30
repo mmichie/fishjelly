@@ -1,6 +1,7 @@
 #include "webserver.h"
 #include <sys/stat.h>
 #include <csignal>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <optional>
@@ -178,8 +179,10 @@ int main(int argc, char *argv[]) {
 
     setupSignals();
 
-    if (chdir("base") == -1) {
-        perror("chdir");
+    try {
+        std::filesystem::current_path("base");
+    } catch (const std::filesystem::filesystem_error& e) {
+        std::cerr << "Error changing directory: " << e.what() << std::endl;
         return 1;
     }
 

@@ -3,12 +3,13 @@
 
 #include "global.h"
 #include <string>
+#include <string_view>
 #include <vector>
 
 class Token {
   public:
-    void tokenize(const string &str, vector<string> &tokens,
-                  const string &delimiters);
+    void tokenize(std::string_view str, std::vector<std::string> &tokens,
+                  std::string_view delimiters);
 };
 
 #endif /* !SHELOB_TOKEN_H */

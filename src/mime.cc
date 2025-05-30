@@ -1,9 +1,13 @@
 #include "mime.h"
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <vector>
 
-bool Mime::readMimeConfig(std::string filename) {
+bool Mime::readMimeConfig(std::string_view filename) {
     std::vector<std::string> tokens;
 
-    std::ifstream file(filename);
+    std::ifstream file{std::string(filename)};
     if (!file.is_open()) {
         std::cerr << "Error: can't open " << filename << std::endl;
         return false;
@@ -32,9 +36,13 @@ bool Mime::readMimeConfig(std::string filename) {
     return true; // Indicate successful execution
 }
 
-std::string Mime::getMimeFromExtension(std::string filename) {
+std::string Mime::getMimeFromExtension(std::string_view filename) {
     // Find the extension (assumes the extension is whatever follows the last '.')
-    std::string file_extension = filename.substr(filename.rfind(".") + 1);
+    auto dot_pos = filename.rfind('.');
+    if (dot_pos == std::string_view::npos) {
+        return "text/plain";
+    }
+    std::string file_extension(filename.substr(dot_pos + 1));
 
     if (this->mimemap.find(file_extension) == this->mimemap.end())
         return "text/plain";

@@ -15,9 +15,9 @@ public:
 /**
  * Centralized error handler for the Socket class.
  */
-void Socket::handleError(const std::string& message) {
+void Socket::handleError(std::string_view message) {
     std::cerr << message << std::endl;
-    throw SocketException(message);
+    throw SocketException(std::string(message));
 }
 
 /**
@@ -69,7 +69,7 @@ void Socket::acceptClient() {
 /**
  * Sends a string to the connected client.
  */
-void Socket::writeLine(const std::string &line) {
+void Socket::writeLine(std::string_view line) {
     if (send(accept_fd, line.data(), line.size(), 0) == -1) {
         handleError("Failed to send data");
     }

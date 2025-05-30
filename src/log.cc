@@ -2,8 +2,10 @@
 #include <filesystem>
 #include <ctime>
 #include <iomanip>
+#include <iostream>
+#include <sstream>
 
-bool Log::openLogFile(const std::string &filename) {
+bool Log::openLogFile(std::string_view filename) {
     if (logfile.is_open()) {
         if constexpr (DEBUG) {
             std::cout << "Log file already open!\n";
@@ -17,7 +19,7 @@ bool Log::openLogFile(const std::string &filename) {
         std::filesystem::create_directories(logPath.parent_path());
     }
 
-    logfile.open(filename, std::ios::out | std::ios::app);
+    logfile.open(std::string(filename), std::ios::out | std::ios::app);
     if (logfile.is_open()) {
         if constexpr (DEBUG) {
             std::cout << "Opened log file\n";
@@ -47,9 +49,9 @@ std::string Log::makeDate() {
     return oss.str();
 }
 
-bool Log::writeLogLine(const std::string &ip, const std::string &request,
-                       int code, int size, const std::string &referrer,
-                       const std::string &agent) {
+bool Log::writeLogLine(std::string_view ip, std::string_view request,
+                       int code, int size, std::string_view referrer,
+                       std::string_view agent) {
     if (logfile.is_open()) {
         logfile << ip << " - - " << makeDate() << " \"" << request << "\" "
                 << code << ' ' << size << " \"" << referrer << "\" \"" << agent

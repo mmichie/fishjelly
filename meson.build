@@ -2,7 +2,7 @@ project('fishjelly', ['cpp', 'c'],
   version : '0.6',
   license : 'GPL-3.0',
   default_options : [
-    'cpp_std=c++17',
+    'cpp_std=c++23',
     'warning_level=3',
     'werror=true',
     'optimization=2',

@@ -1,32 +1,36 @@
 #include "filter.h"
+#include <iostream>
 
 /**
  * Takes unfiltered string and appends footer before the end body tag.
  */
-string Filter::addFooter(string unfiltered) {
-    string filtered;
-    std::string::size_type filter_index;
-
-    filter_index = unfiltered.find("</body>", 0);
+std::string Filter::addFooter(std::string_view unfiltered) {
+    std::string filtered;
+    
+    auto filter_index = unfiltered.find("</body>");
 
     if (DEBUG) {
-        if (filter_index != string::npos)
-            cout << "Found </body> at " << filter_index << endl;
+        if (filter_index != std::string_view::npos)
+            std::cout << "Found </body> at " << filter_index << std::endl;
         else {
-            cout << "Didn't find </body>" << endl;
+            std::cout << "Didn't find </body>" << std::endl;
         }
     }
 
-    unsigned int i;
-
-    for (i = 0; i < filter_index; i++) {
-        filtered.append(1, unfiltered.at(i));
+    if (filter_index != std::string_view::npos) {
+        // Copy everything before </body>
+        filtered.append(unfiltered.substr(0, filter_index));
+        
+        // Add footer content
+        filtered.append("<hr><p><h1>The spice is vital to space travel.</h1></p>");
+        filtered.append("</ul><a href=\"/index.html\">Return to Main Page</a>");
+        
+        // Add the rest of the original content
+        filtered.append(unfiltered.substr(filter_index));
+    } else {
+        // No </body> found, just return the original
+        filtered = std::string(unfiltered);
     }
-
-    filtered.append("<hr><p><h1>The spice is vital to space travel.</h1></p>");
-
-    filtered.append("</ul><a href=\"/index.html\">Return to Main Page</a>");
-    filtered.append("</body></html>");
 
     return filtered;
 }

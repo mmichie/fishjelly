@@ -28,9 +28,9 @@ class Socket {
     struct sockaddr_in client;
 
     void acceptClient();
-    bool readLine(string *buffer);
-    void writeLine(const std::string &line);
-    void handleError(const std::string& message);
+    bool readLine(std::string *buffer);
+    void writeLine(std::string_view line);
+    void handleError(std::string_view message);
     void setSocketOptions();
     void bindSocket(int server_port);
 

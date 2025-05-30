@@ -2,7 +2,10 @@
 #define SHELOB_HTTP_H 1
 
 #include <map>
+#include <memory>
 #include <signal.h>
+#include <string>
+#include <string_view>
 #include <sys/wait.h>
 #include <vector>
 
@@ -18,26 +21,27 @@
 class Http {
 
   private:
-    void printDate(void);
-    void printServer(void);
-    void printContentType(string type);
+    void printDate();
+    void printServer();
+    void printContentType(std::string_view type);
     void printContentLength(int size);
     void printConnectionType(bool keep_alive = false);
-    string sanitizeFilename(string filename);
-    void sendFile(string filename);
-    void processHeadRequest(map<string, string> headermap);
-    void processGetRequest(map<string, string> headermap, string request_line,
+    std::string sanitizeFilename(std::string_view filename);
+    void sendFile(std::string_view filename);
+    void processHeadRequest(const std::map<std::string, std::string>& headermap);
+    void processGetRequest(const std::map<std::string, std::string>& headermap, 
+                           std::string_view request_line,
                            bool keep_alive);
-    void processPostRequest(map<string, string> headermap);
+    void processPostRequest(const std::map<std::string, std::string>& headermap);
 
   public:
-    void sendHeader(int code, int size, string file_type = "text/plain",
+    void sendHeader(int code, int size, std::string_view file_type = "text/plain",
                     bool keep_alive = false);
-    string getHeader();
+    std::string getHeader();
     void start(int server_port);
-    bool parseHeader(string header);
+    bool parseHeader(std::string_view header);
 
-    Socket *sock;
+    std::unique_ptr<Socket> sock;
 };
 
 #endif /* !SHELOB_HTTP_H */
