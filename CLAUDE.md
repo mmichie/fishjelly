@@ -4,6 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build Commands
 
+### Using Make wrapper
+```bash
+make              # Build the project
+make clean        # Clean build artifacts
+make distclean    # Remove entire build directory
+make rebuild      # Clean and rebuild from scratch
+make run          # Run server on port 8080
+make run-daemon   # Run server in daemon mode
+make help         # Show all available targets
+```
+
+### Using Meson directly
 ```bash
 # Configure (first time)
 meson setup builddir

@@ -3,6 +3,17 @@ C++ Web Server
 
 ## Build
 
+### Using Make (wrapper)
+
+```bash
+make                # Build the project
+make run            # Run server on port 8080
+make clean          # Clean build artifacts
+make help           # Show all available targets
+```
+
+### Using Meson directly
+
 ```bash
 # Install meson if needed (e.g., brew install meson on macOS)
 meson setup builddir
