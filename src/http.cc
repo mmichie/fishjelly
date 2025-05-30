@@ -8,6 +8,39 @@
 #include <iostream>
 #include <sstream>
 #include <sys/stat.h>
+#include "footer_middleware.h"
+#include "logging_middleware.h"
+#include "security_middleware.h"
+#include "compression_middleware.h"
+
+/**
+ * Constructor - Initialize without middleware by default
+ */
+Http::Http() {
+    // Don't initialize middleware by default to maintain compatibility
+    // Middleware can be set up explicitly with setupDefaultMiddleware()
+}
+
+/**
+ * Set up default middleware chain
+ */
+void Http::setupDefaultMiddleware() {
+    // Create default middleware chain
+    middleware_chain = std::make_unique<MiddlewareChain>();
+    
+    // Add middleware in order of execution
+    // 1. Security checks first
+    middleware_chain->use(std::make_shared<SecurityMiddleware>());
+    
+    // 2. Logging
+    middleware_chain->use(std::make_shared<LoggingMiddleware>());
+    
+    // 3. Compression (after content is generated)
+    middleware_chain->use(std::make_shared<CompressionMiddleware>());
+    
+    // 4. Footer addition (for .shtml files)
+    middleware_chain->use(std::make_shared<FooterMiddleware>());
+}
 
 /**
  * Parse HTTP date format (RFC 2616)
@@ -234,6 +267,65 @@ void Http::sendFile(std::string_view filename) {
     } else {
         // Send raw buffer
         if (sock->writeRaw(buffer.data(), buffer.size()) == -1) {
+            perror("send");
+        }
+    }
+}
+
+void Http::sendFileWithMiddleware(std::string_view filename, const std::string& method,
+                                  const std::string& path, const std::string& version,
+                                  const std::map<std::string, std::string>& headermap) {
+    // Create request context
+    RequestContext ctx;
+    ctx.method = method;
+    ctx.path = path;
+    ctx.version = version;
+    ctx.headers = headermap;
+    ctx.http_handler = this;
+    
+    // Open file and read content
+    std::ifstream file(filename.data(), std::ios::in | std::ios::binary);
+    if (!file) {
+        ctx.status_code = 404;
+        ctx.response_body = "<html><head><title>404</title></head><body>404 not found</body></html>";
+        ctx.content_type = "text/html";
+    } else {
+        // Determine File Size
+        file.seekg(0, std::ios::end);
+        auto size = file.tellg();
+        file.seekg(0, std::ios::beg);
+        
+        // Read entire file
+        std::vector<char> buffer(size);
+        if (!file.read(buffer.data(), size)) {
+            ctx.status_code = 500;
+            ctx.response_body = "<html><body>500 Internal Server Error</body></html>";
+            ctx.content_type = "text/html";
+        } else {
+            ctx.status_code = 200;
+            ctx.response_body = std::string(buffer.begin(), buffer.end());
+            
+            // Determine content type
+            Mime mime;
+            mime.readMimeConfig("mime.types");
+            ctx.content_type = mime.getMimeFromExtension(filename);
+        }
+    }
+    
+    // Execute middleware chain
+    if (middleware_chain) {
+        middleware_chain->execute(ctx);
+    }
+    
+    // Send response if not already sent by middleware
+    if (!ctx.response_sent) {
+        // Send custom headers added by middleware
+        for (const auto& [key, value] : ctx.response_headers) {
+            sock->writeLine(key + ": " + value);
+        }
+        
+        // Send the response body
+        if (sock->writeRaw(ctx.response_body.data(), ctx.response_body.length()) == -1) {
             perror("send");
         }
     }
@@ -566,7 +658,13 @@ void Http::processGetRequest(const std::map<std::string, std::string>& headermap
        the header and when the file is actually sent through the socket.
     */
     sendHeader(200, size, mime.getMimeFromExtension(filename), keep_alive);
-    sendFile(filename);
+    
+    // Use middleware if available, otherwise use legacy sendFile
+    if (middleware_chain) {
+        sendFileWithMiddleware(filename, "GET", it->second, "HTTP/1.1", headermap);
+    } else {
+        sendFile(filename);
+    }
 }
 
 /**
