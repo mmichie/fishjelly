@@ -31,6 +31,7 @@ class Http {
     void processGetRequest(const std::map<std::string, std::string>& headermap,
                            std::string_view request_line, bool keep_alive);
     void processPostRequest(const std::map<std::string, std::string>& headermap);
+    void processOptionsRequest(const std::map<std::string, std::string>& headermap, bool keep_alive);
 
     std::string lastHeader; // Store last sent header for testing
     int test_requests = 0;  // Exit after N requests (0 = run forever)
@@ -39,6 +40,7 @@ class Http {
   public:
     void sendHeader(int code, int size, std::string_view file_type = "text/plain",
                     bool keep_alive = false);
+    void sendOptionsHeader(bool keep_alive = false);
     std::string getHeader();
     void start(int server_port);
     bool parseHeader(std::string_view header);

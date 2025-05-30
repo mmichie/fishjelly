@@ -287,7 +287,7 @@ bool Http::parseHeader(std::string_view header) {
 
     // Check if we have a valid request method
     if (headermap.find("GET") == headermap.end() && headermap.find("HEAD") == headermap.end() &&
-        headermap.find("POST") == headermap.end()) {
+        headermap.find("POST") == headermap.end() && headermap.find("OPTIONS") == headermap.end()) {
         if (DEBUG) {
             std::cout << "No valid request method found in headermap" << std::endl;
         }
@@ -305,6 +305,8 @@ bool Http::parseHeader(std::string_view header) {
             processHeadRequest(headermap);
         } else if (headermap.find("POST") != headermap.end()) {
             processPostRequest(headermap);
+        } else if (headermap.find("OPTIONS") != headermap.end()) {
+            processOptionsRequest(headermap, keep_alive);
         }
     }
 
@@ -315,6 +317,26 @@ void Http::processPostRequest(const std::map<std::string, std::string>& headerma
     (void)headermap; // Suppress unused parameter warning
     if (sock)
         sock->writeLine("yeah right d00d\n");
+}
+
+/**
+ * Processes an HTTP OPTIONS request.
+ * Returns allowed methods for the requested resource.
+ * @param headermap A map containing parsed HTTP headers.
+ * @param keep_alive Whether to keep the connection alive.
+ */
+void Http::processOptionsRequest(const std::map<std::string, std::string>& headermap, bool keep_alive) {
+    auto it = headermap.find("OPTIONS");
+    if (it == headermap.end())
+        return;
+    
+    std::string uri = it->second;
+    
+    // For OPTIONS *, return server-wide capabilities
+    // For specific URIs, return methods allowed for that resource
+    
+    // Send 200 OK with Allow header
+    sendOptionsHeader(keep_alive);
 }
 
 /**
@@ -495,6 +517,44 @@ void Http::sendHeader(int code, int size, std::string_view file_type, bool keep_
 
     lastHeader = headerStream.str();
 
+    if (sock) {
+        sock->writeLine(lastHeader);
+    }
+}
+
+/**
+ * Send HTTP OPTIONS response headers to the client
+ */
+void Http::sendOptionsHeader(bool keep_alive) {
+    std::ostringstream headerStream;
+    
+    // Status line
+    headerStream << "HTTP/1.1 200 OK\r\n";
+    
+    // Generate date header
+    std::array<char, 50> buf;
+    time_t ltime = time(nullptr);
+    struct tm* today = gmtime(&ltime);
+    strftime(buf.data(), buf.size(), "%a, %d %b %Y %H:%M:%S GMT", today);
+    headerStream << "Date: " << buf.data() << "\r\n";
+    
+    // Server header
+    headerStream << "Server: SHELOB/0.5 (Unix)\r\n";
+    
+    // Allow header - list supported methods
+    headerStream << "Allow: GET, HEAD, POST, OPTIONS\r\n";
+    
+    // Content-Length must be 0 for OPTIONS
+    headerStream << "Content-Length: 0\r\n";
+    
+    // Connection header
+    headerStream << "Connection: " << (keep_alive ? "keep-alive" : "close") << "\r\n";
+    
+    // Empty line to end headers
+    headerStream << "\r\n";
+    
+    lastHeader = headerStream.str();
+    
     if (sock) {
         sock->writeLine(lastHeader);
     }
