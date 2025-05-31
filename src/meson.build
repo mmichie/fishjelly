@@ -15,7 +15,6 @@ lib_sources = files(
   'cgi.cc',
   'cgi.h',
   'global.h',
-  'mktime.c',
   'asio_server.cc',
   'asio_server.h',
   'asio_http_connection.cc',
