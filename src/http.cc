@@ -515,9 +515,93 @@ void Http::processPostRequest(const std::map<std::string, std::string>& headerma
         return;
     }
     
-    // TODO: Actually read and process the POST body
-    if (sock)
-        sock->write_line("yeah right d00d\n");
+    // Parse Content-Length
+    int content_length = 0;
+    try {
+        content_length = std::stoi(content_length_it->second);
+    } catch (const std::exception& e) {
+        if (DEBUG) {
+            std::cout << "Invalid Content-Length value: " << content_length_it->second << std::endl;
+        }
+        if (sock) {
+            sendHeader(400, 0, "text/html", keep_alive);
+            sock->write_line("<html><body>400 Bad Request - Invalid Content-Length</body></html>");
+        }
+        return;
+    }
+    
+    // Check for negative or excessively large content length
+    const int MAX_POST_SIZE = 10 * 1024 * 1024; // 10MB max
+    if (content_length < 0 || content_length > MAX_POST_SIZE) {
+        if (DEBUG) {
+            std::cout << "Invalid Content-Length: " << content_length << std::endl;
+        }
+        if (sock) {
+            sendHeader(413, 0, "text/html", keep_alive);
+            sock->write_line("<html><body>413 Request Entity Too Large</body></html>");
+        }
+        return;
+    }
+    
+    // Read the POST body
+    std::vector<char> post_body(content_length);
+    if (content_length > 0) {
+        ssize_t bytes_read = sock->read_raw(post_body.data(), content_length);
+        if (bytes_read != content_length) {
+            if (DEBUG) {
+                std::cout << "Failed to read complete POST body. Expected: " << content_length 
+                          << ", Read: " << bytes_read << std::endl;
+            }
+            if (sock) {
+                sendHeader(400, 0, "text/html", keep_alive);
+                sock->write_line("<html><body>400 Bad Request - Incomplete POST body</body></html>");
+            }
+            return;
+        }
+    }
+    
+    // Convert to string for processing
+    std::string body_str(post_body.begin(), post_body.end());
+    
+    if (DEBUG) {
+        std::cout << "POST body (" << content_length << " bytes): " << body_str << std::endl;
+    }
+    
+    // Get the requested URI
+    auto post_it = headermap.find("POST");
+    if (post_it == headermap.end()) {
+        return;
+    }
+    std::string uri = post_it->second;
+    
+    // Simple echo response for now - in a real implementation, 
+    // this would process the data based on the URI and Content-Type
+    std::string response = "<html><body><h1>POST Request Received</h1>\n";
+    response += "<p>URI: " + uri + "</p>\n";
+    response += "<p>Content-Length: " + std::to_string(content_length) + "</p>\n";
+    
+    // Check Content-Type
+    auto content_type_it = headermap.find("Content-Type");
+    if (content_type_it != headermap.end()) {
+        response += "<p>Content-Type: " + content_type_it->second + "</p>\n";
+    }
+    
+    response += "<p>Body:</p><pre>" + body_str + "</pre>\n";
+    response += "</body></html>";
+    
+    // Send response
+    sendHeader(200, response.length(), "text/html", keep_alive);
+    sock->write_line(response);
+    
+    // Log the request
+    Log log;
+    log.openLogFile("logs/access_log");
+    auto referer_it = headermap.find("Referer");
+    auto user_agent_it = headermap.find("User-Agent");
+    log.writeLogLine(inet_ntoa(sock->client.sin_addr), "POST " + uri, 200, response.length(),
+                     referer_it != headermap.end() ? referer_it->second : "",
+                     user_agent_it != headermap.end() ? user_agent_it->second : "");
+    log.closeLogFile();
 }
 
 /**
@@ -741,6 +825,9 @@ void Http::sendHeader(int code, int size, std::string_view file_type, bool keep_
         break;
     case 411:
         headerStream << "HTTP/1.1 411 Length Required\r\n";
+        break;
+    case 413:
+        headerStream << "HTTP/1.1 413 Request Entity Too Large\r\n";
         break;
     case 501:
         headerStream << "HTTP/1.1 501 Not Implemented\r\n";

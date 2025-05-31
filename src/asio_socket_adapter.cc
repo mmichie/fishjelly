@@ -54,3 +54,20 @@ int AsioSocketAdapter::write_raw(const char* data, size_t size) {
     response_buffer_.write(data, size);
     return size;  // Always successful in buffer mode
 }
+
+ssize_t AsioSocketAdapter::read_raw(char* buffer, size_t size) {
+    if (request_pos_ >= request_data_.size()) {
+        return 0;  // No more data
+    }
+    
+    // Read up to 'size' bytes from request_data_
+    size_t available = request_data_.size() - request_pos_;
+    size_t to_read = std::min(size, available);
+    
+    if (to_read > 0) {
+        memcpy(buffer, request_data_.data() + request_pos_, to_read);
+        request_pos_ += to_read;
+    }
+    
+    return to_read;
+}

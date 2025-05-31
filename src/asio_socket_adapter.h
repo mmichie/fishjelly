@@ -17,6 +17,7 @@ public:
     // Override Socket methods to write to string buffer instead
     void write_line(std::string_view line) override;
     bool read_line(std::string* buffer) override;
+    ssize_t read_raw(char* buffer, size_t size) override;
     int write_raw(const char* data, size_t size) override;
     
     // Get accumulated response

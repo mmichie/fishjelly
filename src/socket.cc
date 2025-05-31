@@ -114,6 +114,16 @@ int Socket::write_raw(const char* data, size_t size) {
 }
 
 /**
+ * Reads raw data from the socket.
+ */
+ssize_t Socket::read_raw(char* buffer, size_t size) {
+    if (accept_fd_ < 0) {
+        return -1;
+    }
+    return recv(accept_fd_, buffer, size, 0);
+}
+
+/**
  * Reads a line from the socket into the provided buffer.
  */
 bool Socket::read_line(std::string* buffer) {

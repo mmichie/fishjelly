@@ -29,6 +29,7 @@ class Socket {
     void accept_client();
     virtual bool read_line(std::string* buffer);
     bool read_line_with_timeout(std::string* buffer, int timeout_seconds);
+    virtual ssize_t read_raw(char* buffer, size_t size); // Returns bytes read or -1 on error
     virtual void write_line(std::string_view line);
     virtual int write_raw(const char* data, size_t size); // Returns bytes written or -1 on error
     void handle_error(std::string_view message);
