@@ -1,0 +1,18 @@
+GET / HTTP/1.1
+
+
+GET
+
+
+GET / HTTP/999.999
+Host: localhost
+
+GET /file.ext HTTP/1.1
+Host: 
+Host: duplicate.header
+
+GET /emoji/😀/🎉 HTTP/1.1
+Host: localhost
+
+GET /null\x00byte HTTP/1.1
+Host: localhost

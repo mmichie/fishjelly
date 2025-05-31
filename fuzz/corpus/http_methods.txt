@@ -1,0 +1,17 @@
+OPTIONS * HTTP/1.1
+Host: localhost
+
+HEAD /index.html HTTP/1.1
+Host: localhost
+
+DELETE /file HTTP/1.1
+Host: localhost
+
+PATCH /resource HTTP/1.1
+Host: localhost
+
+TRACE / HTTP/1.1
+Host: localhost
+
+CONNECT proxy.example.com:443 HTTP/1.1
+Host: proxy.example.com

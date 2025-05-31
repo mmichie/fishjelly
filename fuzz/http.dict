@@ -1,0 +1,101 @@
+# HTTP fuzzing dictionary
+# Format: "string"
+
+# Methods
+"GET"
+"POST"
+"HEAD"
+"OPTIONS"
+"PUT"
+"DELETE"
+"PATCH"
+"TRACE"
+"CONNECT"
+
+# Versions
+"HTTP/1.0"
+"HTTP/1.1"
+"HTTP/2.0"
+"HTTP/0.9"
+
+# Common headers
+"Host:"
+"User-Agent:"
+"Accept:"
+"Accept-Language:"
+"Accept-Encoding:"
+"Content-Type:"
+"Content-Length:"
+"Connection:"
+"Cookie:"
+"Authorization:"
+"Cache-Control:"
+"If-Modified-Since:"
+"If-None-Match:"
+"Referer:"
+"X-Forwarded-For:"
+"X-Real-IP:"
+
+# Header values
+"keep-alive"
+"close"
+"gzip, deflate"
+"text/html"
+"application/json"
+"application/x-www-form-urlencoded"
+"multipart/form-data"
+"localhost"
+"127.0.0.1"
+"Mozilla/5.0"
+"no-cache"
+"max-age=0"
+
+# Special characters and sequences
+"\r\n"
+"\r\n\r\n"
+": "
+"/"
+"?"
+"&"
+"="
+"%20"
+"%2F"
+"%2e%2e%2f"
+"../"
+"../../"
+"../../../"
+
+# Path components
+"/index.html"
+"/admin"
+"/.env"
+"/.git"
+"/.htaccess"
+"/cgi-bin/"
+"/.well-known/"
+"/api/"
+"/static/"
+
+# Malicious patterns
+"<script>"
+"</script>"
+"javascript:"
+"' OR '1'='1"
+"${jndi:ldap://"
+"\x00"
+"\xFF\xFF\xFF\xFF"
+
+# Numbers
+"0"
+"1"
+"-1"
+"9999"
+"65535"
+"2147483647"
+"-2147483648"
+
+# Encodings
+"chunked"
+"identity"
+"base64"
+"quoted-printable"
