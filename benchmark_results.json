@@ -1,0 +1,52 @@
+{
+  "fork": {
+    "mode": "Fork Mode",
+    "timestamp": "2025-05-30T17:39:16.243626",
+    "throughput": {
+      "requests_per_second": 3609.276428662797,
+      "total_requests": 36105,
+      "errors": 0,
+      "duration": 10.003390073776245
+    },
+    "latency": {
+      "mean_ms": 1.6898131370544434,
+      "median_ms": 1.6930103302001953,
+      "min_ms": 1.5342235565185547,
+      "max_ms": 2.0160675048828125,
+      "p95_ms": 1.796722412109375,
+      "p99_ms": 2.0160675048828125,
+      "errors": 0
+    },
+    "concurrent": {
+      "attempted": 50,
+      "successful": 34,
+      "failed": 16,
+      "success_rate": 68.0
+    }
+  },
+  "asio": {
+    "mode": "ASIO Mode",
+    "timestamp": "2025-05-30T17:39:28.468215",
+    "throughput": {
+      "requests_per_second": 7028.4040809119215,
+      "total_requests": 70291,
+      "errors": 0,
+      "duration": 10.000990152359009
+    },
+    "latency": {
+      "mean_ms": 0.29385805130004883,
+      "median_ms": 0.29146671295166016,
+      "min_ms": 0.2732276916503906,
+      "max_ms": 0.32901763916015625,
+      "p95_ms": 0.3199577331542969,
+      "p99_ms": 0.32901763916015625,
+      "errors": 0
+    },
+    "concurrent": {
+      "attempted": 50,
+      "successful": 50,
+      "failed": 0,
+      "success_rate": 100.0
+    }
+  }
+}
