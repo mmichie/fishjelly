@@ -1,5 +1,5 @@
 #ifndef SHELOB_GLOBAL_H
-#define SHELOB_GLOBAL_H 1
+#define SHELOB_GLOBAL_H
 
 #include <cassert>
 
@@ -7,6 +7,6 @@
 #include <config.h>
 #endif
 
-#define DEBUG 0
+constexpr bool DEBUG = false;
 
 #endif /* !SHELOB_GLOBAL_H */

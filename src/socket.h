@@ -15,34 +15,34 @@
 
 class Socket {
   private:
-    int socket_fd, sin_size;
-    struct sockaddr_in server;
-    const static int NUM_CLIENTS_TO_QUEUE = 10;
-    void serverBind(int server_port);
-    FILE* socket_fp;
+    int socket_fd_{-1}, sin_size_;
+    struct sockaddr_in server_;
+    static constexpr int NUM_CLIENTS_TO_QUEUE = 10;
+    void server_bind(int server_port);
+    FILE* socket_fp_{nullptr};
 
   public:
-    int accept_fd, pid;
+    int accept_fd_{-1}, pid_;
 
     struct sockaddr_in client;
 
-    void acceptClient();
-    virtual bool readLine(std::string* buffer);
-    bool readLineWithTimeout(std::string* buffer, int timeout_seconds);
-    virtual void writeLine(std::string_view line);
-    virtual int writeRaw(const char* data, size_t size); // Returns bytes written or -1 on error
-    void handleError(std::string_view message);
-    void setSocketOptions();
-    void bindSocket(int server_port);
+    void accept_client();
+    virtual bool read_line(std::string* buffer);
+    bool read_line_with_timeout(std::string* buffer, int timeout_seconds);
+    virtual void write_line(std::string_view line);
+    virtual int write_raw(const char* data, size_t size); // Returns bytes written or -1 on error
+    void handle_error(std::string_view message);
+    void set_socket_options();
+    void bind_socket(int server_port);
 
-    void closeSocket();
-    void closeClient(); // Close only the client connection
+    void close_socket();
+    void close_client(); // Close only the client connection
 
     // Constructor
-    Socket(int server_port) : socket_fd(-1), socket_fp(nullptr), accept_fd(-1) {
+    explicit Socket(int server_port) : socket_fd_{-1}, socket_fp_{nullptr}, accept_fd_{-1} {
         // Bind the port
         if (server_port > 0) {
-            serverBind(server_port);
+            server_bind(server_port);
         }
     }
     

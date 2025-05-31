@@ -15,9 +15,9 @@ public:
     AsioSocketAdapter(tcp::socket* asio_socket, const tcp::endpoint& client_endpoint);
     
     // Override Socket methods to write to string buffer instead
-    void writeLine(std::string_view line) override;
-    bool readLine(std::string* buffer) override;
-    int writeRaw(const char* data, size_t size) override;
+    void write_line(std::string_view line) override;
+    bool read_line(std::string* buffer) override;
+    int write_raw(const char* data, size_t size) override;
     
     // Get accumulated response
     std::string getResponse() const { return response_buffer_.str(); }
@@ -29,7 +29,7 @@ public:
     }
     
     // Add raw data to response (for sendFile)
-    void writeRawData(const char* data, size_t size) {
+    void write_rawData(const char* data, size_t size) {
         response_buffer_.write(data, size);
     }
     

@@ -17,7 +17,7 @@ TEST(SocketTest, ConstructorBindsToPort) {
     try {
         Socket socket(test_port);
         // If we get here, socket was created successfully
-        socket.closeSocket();
+        socket.close_socket();
     } catch (...) {
         // Port might be in use, which is okay for testing
     }
@@ -31,7 +31,7 @@ TEST(SocketTest, SetSocketOptions) {
         // setSocketOptions is called in constructor
         // Socket created successfully means options were set
         SUCCEED();
-        socket.closeSocket();
+        socket.close_socket();
     } catch (...) {
         // Port might be in use
         GTEST_SKIP() << "Port " << test_port << " might be in use";
@@ -46,10 +46,10 @@ TEST(SocketTest, ReadLineEmptySocket) {
         std::string buffer;
         
         // Reading from unconnected socket should fail
-        bool result = socket.readLine(&buffer);
+        bool result = socket.read_line(&buffer);
         EXPECT_FALSE(result);
         
-        socket.closeSocket();
+        socket.close_socket();
     } catch (...) {
         // Port might be in use
     }
@@ -65,7 +65,7 @@ TEST(SocketTest, WriteLineToSocket) {
         // but writeLine doesn't return status
         socket.writeLine("Test message\n");
         
-        socket.closeSocket();
+        socket.close_socket();
     } catch (...) {
         // Port might be in use
     }
@@ -80,7 +80,7 @@ TEST(SocketTest, HandleError) {
         // handleError should log the error message
         socket.handleError("Test error message");
         
-        socket.closeSocket();
+        socket.close_socket();
     } catch (...) {
         // Port might be in use
     }
@@ -93,7 +93,7 @@ TEST(SocketTest, CloseSocket) {
         Socket socket(test_port);
         // Successfully created socket
         
-        socket.closeSocket();
+        socket.close_socket();
         // If no exception, close succeeded
         SUCCEED();
         
@@ -111,8 +111,8 @@ TEST(SocketTest, MultipleSocketsOnDifferentPorts) {
         // Both sockets created successfully
         SUCCEED();
         
-        socket1.closeSocket();
-        socket2.closeSocket();
+        socket1.close_socket();
+        socket2.close_socket();
     } catch (...) {
         // Ports might be in use
         GTEST_SKIP() << "Ports might be in use";

@@ -2,7 +2,7 @@
 #include <iostream>
 
 AsioHttpConnection::AsioHttpConnection(tcp::socket socket)
-    : socket_(std::move(socket)) {
+    : socket_(std::move(socket)), response_buffer_{} {
 }
 
 asio::awaitable<bool> AsioHttpConnection::process_request(const std::string& header) {

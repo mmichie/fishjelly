@@ -10,7 +10,7 @@ public:
     virtual ~HttpOutputInterface() = default;
     
     // Write a line of text (adds newline if not present)
-    virtual void writeLine(std::string_view line) = 0;
+    virtual void write_line(std::string_view line) = 0;
     
     // Write raw data
     virtual void writeData(const char* data, size_t size) = 0;

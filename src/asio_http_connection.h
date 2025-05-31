@@ -13,7 +13,7 @@ using tcp = asio::ip::tcp;
 
 class AsioHttpConnection : public std::enable_shared_from_this<AsioHttpConnection> {
 public:
-    AsioHttpConnection(tcp::socket socket);
+    explicit AsioHttpConnection(tcp::socket socket);
     
     // Process a single HTTP request/response cycle
     asio::awaitable<bool> process_request(const std::string& header);

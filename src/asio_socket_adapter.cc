@@ -20,11 +20,11 @@ AsioSocketAdapter::AsioSocketAdapter(tcp::socket* asio_socket, const tcp::endpoi
         memcpy(&client.sin_addr.s_addr, bytes.data(), 4);
     }
     
-    // Set accept_fd to a dummy value to indicate socket is "open"
-    accept_fd = 1;
+    // Set accept_fd_ to a dummy value to indicate socket is "open"
+    accept_fd_ = 1;
 }
 
-void AsioSocketAdapter::writeLine(std::string_view line) {
+void AsioSocketAdapter::write_line(std::string_view line) {
     response_buffer_ << line;
     // The base class adds newline, but we want to preserve exact output
     if (!line.empty() && line.back() != '\n') {
@@ -32,7 +32,7 @@ void AsioSocketAdapter::writeLine(std::string_view line) {
     }
 }
 
-bool AsioSocketAdapter::readLine(std::string* buffer) {
+bool AsioSocketAdapter::read_line(std::string* buffer) {
     if (request_pos_ >= request_data_.size()) {
         return false;
     }
@@ -50,7 +50,7 @@ bool AsioSocketAdapter::readLine(std::string* buffer) {
     return !buffer->empty();
 }
 
-int AsioSocketAdapter::writeRaw(const char* data, size_t size) {
+int AsioSocketAdapter::write_raw(const char* data, size_t size) {
     response_buffer_.write(data, size);
     return size;  // Always successful in buffer mode
 }

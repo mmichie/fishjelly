@@ -38,3 +38,39 @@ subdir('src')
 if get_option('enable-tests')
   subdir('tests')
 endif
+
+# Find clang-tidy
+clang_tidy = find_program('clang-tidy', required : false)
+
+if clang_tidy.found()
+  # Get all source files
+  source_files = files(
+    'src/socket.cc',
+    'src/http.cc',
+    'src/filter.cc',
+    'src/log.cc',
+    'src/mime.cc',
+    'src/token.cc',
+    'src/cgi.cc',
+    'src/webserver.cc',
+    'src/asio_server.cc',
+    'src/asio_http_connection.cc',
+    'src/asio_socket_adapter.cc',
+    'src/footer_middleware.cc',
+    'src/logging_middleware.cc',
+    'src/security_middleware.cc',
+    'src/compression_middleware.cc'
+  )
+  
+  # Add clang-tidy target
+  run_target('clang-tidy',
+    command : [clang_tidy, '-p', meson.current_build_dir(), source_files]
+  )
+  
+  # Add clang-tidy with fixes
+  run_target('clang-tidy-fix',
+    command : [clang_tidy, '-p', meson.current_build_dir(), '--fix', source_files]
+  )
+else
+  warning('clang-tidy not found, linting targets will not be available')
+endif

@@ -103,7 +103,7 @@ void Http::printDate() {
     // Date: Fri, 16 Jul 2004 15:37:18 GMT
     strftime(buf.data(), buf.size(), "%a, %d %b %Y %H:%M:%S GMT", today);
 
-    sock->writeLine(std::format("Date: {}\r\n", buf.data()));
+    sock->write_line(std::format("Date: {}\r\n", buf.data()));
 }
 
 /**
@@ -111,7 +111,7 @@ void Http::printDate() {
  */
 void Http::printServer() {
     if (sock)
-        sock->writeLine("Server: SHELOB/0.5 (Unix)\r\n");
+        sock->write_line("Server: SHELOB/0.5 (Unix)\r\n");
 }
 
 /**
@@ -119,7 +119,7 @@ void Http::printServer() {
  */
 void Http::printContentType(std::string_view type) {
     if (sock)
-        sock->writeLine(std::format("Content-Type: {}\r\n", type));
+        sock->write_line(std::format("Content-Type: {}\r\n", type));
 }
 
 /**
@@ -128,7 +128,7 @@ void Http::printContentType(std::string_view type) {
 void Http::printContentLength(int size) {
     assert(size >= 0);
     if (sock)
-        sock->writeLine(std::format("Content-Length: {}\r\n", size));
+        sock->write_line(std::format("Content-Length: {}\r\n", size));
 }
 
 /**
@@ -139,9 +139,9 @@ void Http::printConnectionType(bool keep_alive) {
         return;
 
     if (keep_alive)
-        sock->writeLine("Connection: keep-alive\r\n");
+        sock->write_line("Connection: keep-alive\r\n");
     else
-        sock->writeLine("Connection: close\r\n");
+        sock->write_line("Connection: close\r\n");
 }
 
 /**
@@ -156,7 +156,7 @@ void Http::start(int server_port) {
 
     // Loop to handle clients
     while (1) {
-        sock->acceptClient();
+        sock->accept_client();
 
         pid = fork();
         if (pid < 0) {
@@ -178,13 +178,13 @@ void Http::start(int server_port) {
                 keep_alive = parseHeader(header);
             }
 
-            sock->closeSocket();
+            sock->close_socket();
             exit(0);
         }
 
         /* Parent */
         else {
-            sock->closeClient(); // Only close client connection, not server socket
+            sock->close_client(); // Only close client connection, not server socket
             request_count++;
 
             // Exit after N requests in test mode
@@ -261,12 +261,12 @@ void Http::sendFile(std::string_view filename) {
         filtered = filter.addFooter(s_buffer);
 
         // Send filtered content
-        if (sock->writeRaw(filtered.data(), filtered.length()) == -1) {
+        if (sock->write_raw(filtered.data(), filtered.length()) == -1) {
             perror("send");
         }
     } else {
         // Send raw buffer
-        if (sock->writeRaw(buffer.data(), buffer.size()) == -1) {
+        if (sock->write_raw(buffer.data(), buffer.size()) == -1) {
             perror("send");
         }
     }
@@ -321,11 +321,11 @@ void Http::sendFileWithMiddleware(std::string_view filename, const std::string& 
     if (!ctx.response_sent) {
         // Send custom headers added by middleware
         for (const auto& [key, value] : ctx.response_headers) {
-            sock->writeLine(key + ": " + value);
+            sock->write_line(key + ": " + value);
         }
         
         // Send the response body
-        if (sock->writeRaw(ctx.response_body.data(), ctx.response_body.length()) == -1) {
+        if (sock->write_raw(ctx.response_body.data(), ctx.response_body.length()) == -1) {
             perror("send");
         }
     }
@@ -371,7 +371,7 @@ bool Http::parseHeader(std::string_view header) {
         // Only send 400 if we actually have a malformed request line (not empty)
         if (!request_line.empty() && sock) {
             sendHeader(400, 0, "text/html", false);
-            sock->writeLine("<html><body>400 Bad Request - Malformed request line</body></html>");
+            sock->write_line("<html><body>400 Bad Request - Malformed request line</body></html>");
         }
         return false;
     }
@@ -392,7 +392,7 @@ bool Http::parseHeader(std::string_view header) {
         if (sock) {
             // Send 505 HTTP Version Not Supported
             sendHeader(505, 0, "text/html", false);
-            sock->writeLine("<html><body>505 HTTP Version Not Supported</body></html>");
+            sock->write_line("<html><body>505 HTTP Version Not Supported</body></html>");
         }
         return false;
     }
@@ -443,7 +443,7 @@ bool Http::parseHeader(std::string_view header) {
         }
         if (sock) {
             sendHeader(400, 0, "text/html", false);
-            sock->writeLine(
+            sock->write_line(
                 "<html><body>400 Bad Request - HTTP/1.1 requires Host header</body></html>");
         }
         return false;
@@ -481,7 +481,7 @@ bool Http::parseHeader(std::string_view header) {
             headerStream << "Connection: " << (keep_alive ? "keep-alive" : "close") << "\r\n";
             headerStream << "\r\n";
             
-            sock->writeLine(headerStream.str());
+            sock->write_line(headerStream.str());
         }
         return false;
     }
@@ -510,14 +510,14 @@ void Http::processPostRequest(const std::map<std::string, std::string>& headerma
         }
         if (sock) {
             sendHeader(411, 0, "text/html", keep_alive);
-            sock->writeLine("<html><body>411 Length Required</body></html>");
+            sock->write_line("<html><body>411 Length Required</body></html>");
         }
         return;
     }
     
     // TODO: Actually read and process the POST body
     if (sock)
-        sock->writeLine("yeah right d00d\n");
+        sock->write_line("yeah right d00d\n");
 }
 
 /**
@@ -612,9 +612,9 @@ void Http::processGetRequest(const std::map<std::string, std::string>& headermap
     // can't find file, 404 it
     if (!file.is_open()) {
         sendHeader(404, 0, "text/html", false);
-        sock->writeLine("<html><head><title>404</title></head><body>404 not "
+        sock->write_line("<html><head><title>404</title></head><body>404 not "
                         "found</body></html>");
-        // sock->closeSocket();
+        // sock->close_socket();
         return;
     }
 
@@ -635,8 +635,8 @@ void Http::processGetRequest(const std::map<std::string, std::string>& headermap
 
     if (file_extension == ".sh") {
         Cgi cgi;
-        cgi.executeCGI(filename, sock->accept_fd, headermap);
-        sock->closeSocket();
+        cgi.executeCGI(filename, sock->accept_fd_, headermap);
+        sock->close_socket();
         return;
     }
 
@@ -684,9 +684,9 @@ std::string Http::getHeader(bool use_timeout) {
     // Read headers line by line until we get an empty line
     bool read_success;
     if (use_timeout) {
-        read_success = sock->readLineWithTimeout(&line, KEEPALIVE_TIMEOUT);
+        read_success = sock->read_line_with_timeout(&line, KEEPALIVE_TIMEOUT);
     } else {
-        read_success = sock->readLine(&line);
+        read_success = sock->read_line(&line);
     }
     
     while (read_success) {
@@ -708,9 +708,9 @@ std::string Http::getHeader(bool use_timeout) {
 
         line.clear();
         if (use_timeout) {
-            read_success = sock->readLineWithTimeout(&line, KEEPALIVE_TIMEOUT);
+            read_success = sock->read_line_with_timeout(&line, KEEPALIVE_TIMEOUT);
         } else {
-            read_success = sock->readLine(&line);
+            read_success = sock->read_line(&line);
         }
     }
 
@@ -772,7 +772,7 @@ void Http::sendHeader(int code, int size, std::string_view file_type, bool keep_
     lastHeader = headerStream.str();
 
     if (sock) {
-        sock->writeLine(lastHeader);
+        sock->write_line(lastHeader);
     }
 }
 
@@ -810,6 +810,6 @@ void Http::sendOptionsHeader(bool keep_alive) {
     lastHeader = headerStream.str();
     
     if (sock) {
-        sock->writeLine(lastHeader);
+        sock->write_line(lastHeader);
     }
 }
