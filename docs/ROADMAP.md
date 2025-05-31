@@ -30,11 +30,32 @@ This document outlines planned features and improvements for the Fishjelly web s
 - [ ] **FastCGI Support** - For PHP and other languages
 - [ ] **Caching Headers** - Complete cache-control implementation
 
+## Reverse Proxy & Load Balancer Features (Traefik-like)
+
+- [ ] **Dynamic Service Discovery** - Auto-discover backends from Docker/Kubernetes
+- [ ] **Docker Integration** - Watch Docker API for container changes
+- [ ] **Kubernetes Ingress Controller** - Native K8s ingress support
+- [ ] **Automatic HTTPS** - Let's Encrypt integration with ACME
+- [ ] **Load Balancing Algorithms** - Round-robin, least connections, weighted
+- [ ] **Health Checks** - Active and passive backend health monitoring
+- [ ] **Circuit Breaker** - Automatic failover for unhealthy backends
+- [ ] **Retry Logic** - Configurable retry policies
+- [ ] **Request/Response Modification** - Headers, path rewriting
+- [ ] **Service Mesh Integration** - Consul, etcd service discovery
+- [ ] **Metrics & Tracing** - Prometheus metrics, OpenTelemetry support
+- [ ] **WebSocket Proxying** - Full duplex connection proxying
+- [ ] **gRPC Support** - HTTP/2 based RPC proxying
+- [ ] **Canary Deployments** - Traffic splitting and A/B testing
+- [ ] **Rate Limiting per Service** - Different limits per backend
+- [ ] **Authentication Middleware** - OAuth2, JWT, Basic Auth forwarding
+- [ ] **Access Control** - IP whitelisting, API key validation
+- [ ] **Dynamic Configuration** - Hot reload from file, API, or service discovery
+- [ ] **Dashboard UI** - Web interface for monitoring and configuration
+- [ ] **Multi-protocol Support** - TCP, UDP proxy capabilities
+
 ## Nice to Have (Enhanced Features)
 
 - [ ] **HTTP/3 QUIC Support** - Latest protocol version
-- [ ] **Reverse Proxy Mode** - Proxy requests to backend servers
-- [ ] **Load Balancing** - Distribute requests across backends
 - [ ] **Built-in Monitoring** - /metrics endpoint for Prometheus
 - [ ] **Hot Configuration Reload** - Zero-downtime config changes
 - [ ] **Directory Listing** - Auto-generated directory indexes with templates
@@ -68,10 +89,13 @@ This document outlines planned features and improvements for the Fishjelly web s
 
 ## Future Considerations
 
-- [ ] **Rust Rewrite** - Consider memory-safe language for core components
-- [ ] **Container-Native Features** - Kubernetes health checks, graceful shutdown
-- [ ] **Edge Computing Support** - Lightweight mode for edge deployments
-- [ ] **AI/ML Integration** - Smart caching, anomaly detection
+- [ ] **Rust Components** - Memory-safe modules for critical paths
+- [ ] **WASM Plugin System** - WebAssembly plugins for extending functionality
+- [ ] **Edge Computing Mode** - Lightweight deployment for edge locations
+- [ ] **AI/ML Integration** - Smart routing, anomaly detection, predictive scaling
+- [ ] **Multi-cluster Support** - Federated proxy across multiple clusters
+- [ ] **GitOps Integration** - Config from Git repositories
+- [ ] **Serverless Backend Support** - Route to Lambda/Cloud Functions
 
 ---
 
