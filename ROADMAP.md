@@ -65,7 +65,7 @@ asio::awaitable<void> handle_request(tcp::socket socket) {
 5. Leverage ASIO features (SSL, timers, etc.)
 
 ## Testing
-- HTTP/1.1 compliance test suite exists (`test_http11_compliance.py`)
+- HTTP/1.1 compliance test suite exists (`scripts/testing/test_http11_compliance.py`)
 - Currently: 1/12 tests passing
 - Goal: Full compliance with HTTP/1.1 spec
 
