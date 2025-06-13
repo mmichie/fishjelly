@@ -23,7 +23,7 @@ if gtest_dep.found()
       test_file,
       dependencies : gtest_dep,
       link_with : fishjelly_lib,
-      cpp_args : ['-DGIT_HASH="test"', '-Wno-deprecated-declarations']
+      cpp_args : ['-DGIT_HASH="test"', '-Wno-deprecated-declarations', '-Wno-error=#warnings']
     )
     test(test_name, test_exe)
   endforeach

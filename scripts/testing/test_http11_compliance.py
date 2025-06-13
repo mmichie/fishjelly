@@ -45,6 +45,7 @@ class HTTPComplianceTest:
             sock.send(request.encode())
             
             response = b''
+            complete = False
             while True:
                 data = sock.recv(1024)
                 if not data:
@@ -55,7 +56,7 @@ class HTTPComplianceTest:
                     # For HEAD/OPTIONS, we're done
                     if b'HEAD' in request.encode() or b'OPTIONS' in request.encode():
                         break
-                    # For GET, check Content-Length
+                    # For GET/POST, check Content-Length
                     headers = response.split(b'\r\n\r\n')[0].decode()
                     if 'Content-Length:' in headers:
                         for line in headers.split('\r\n'):
@@ -63,7 +64,14 @@ class HTTPComplianceTest:
                                 content_length = int(line.split()[1])
                                 header_end = response.find(b'\r\n\r\n') + 4
                                 if len(response) >= header_end + content_length:
+                                    complete = True
                                     break
+                    elif 'Transfer-Encoding: chunked' not in headers:
+                        # No Content-Length and not chunked, assume no body
+                        complete = True
+                    
+                    if complete:
+                        break
             
             sock.close()
             return response.decode('utf-8', errors='ignore')

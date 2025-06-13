@@ -29,10 +29,13 @@ void Socket::close_socket() {
         std::cout << "Closing socket" << std::endl;
     }
 
-    if (socket_fp_ && fclose(socket_fp_) != 0) {
-        handle_error("Failed to close socket file pointer");
+    // Close the accept socket if open
+    if (accept_fd_ != -1) {
+        close(accept_fd_);
+        accept_fd_ = -1;
     }
 
+    // Close the server socket if open
     if (socket_fd_ != -1) {
         close(socket_fd_);
         socket_fd_ = -1;
@@ -53,9 +56,6 @@ void Socket::close_client() {
         close(accept_fd_);
         accept_fd_ = -1;
     }
-
-    // Don't close socket_fp_ in parent as it was created in child's address space
-    socket_fp_ = nullptr;
 }
 
 /**
@@ -84,10 +84,9 @@ void Socket::accept_client() {
                   << getpid() << std::endl;
     }
 
-    socket_fp_ = fdopen(accept_fd_, "r");
-    if (socket_fp_ == nullptr) {
-        handle_error("Failed to open file descriptor");
-    }
+    // Don't create FILE* stream to avoid buffering issues with keep-alive
+    // We'll use raw socket operations for both reading and writing
+    socket_fp_ = nullptr;
 }
 
 /**
@@ -127,39 +126,35 @@ ssize_t Socket::read_raw(char* buffer, size_t size) {
  * Reads a line from the socket into the provided buffer.
  */
 bool Socket::read_line(std::string* buffer) {
-    if (!socket_fp_) {
+    if (accept_fd_ < 0) {
         return false;
     }
 
-    char c = fgetc(socket_fp_);
+    char c;
+    ssize_t n;
 
-    while (c != '\n' && c != EOF && c != '\r') {
+    // Read one character at a time until we find a newline
+    while ((n = recv(accept_fd_, &c, 1, 0)) > 0) {
         buffer->push_back(c);
-        c = fgetc(socket_fp_);
-    }
-
-    // Handle CRLF properly
-    if (c == '\r') {
-        buffer->push_back(c);
-        char next = fgetc(socket_fp_);
-        if (next == '\n') {
-            buffer->push_back(next);
-        } else if (next != EOF) {
-            // Put it back if it's not '\n'
-            ungetc(next, socket_fp_);
+        
+        // Check for line endings
+        if (c == '\n') {
+            return true;
         }
-    } else if (c == '\n') {
-        buffer->push_back(c);
+        
+        // For \r, just continue reading - we'll get \n next if it's CRLF
+        // This avoids issues with MSG_PEEK
     }
 
-    return c != EOF;
+    // Return true if we read something, false on error/EOF
+    return buffer->length() > 0;
 }
 
 /**
  * Reads a line from the socket with a timeout.
  */
 bool Socket::read_line_with_timeout(std::string* buffer, int timeout_seconds) {
-    if (!socket_fp_ || accept_fd_ < 0) {
+    if (accept_fd_ < 0) {
         return false;
     }
 
@@ -185,6 +180,14 @@ bool Socket::read_line_with_timeout(std::string* buffer, int timeout_seconds) {
         // Timeout occurred
         if (DEBUG) {
             std::cout << "Read timeout after " << timeout_seconds << " seconds" << std::endl;
+        }
+        return false;
+    }
+    
+    // Check if the connection was closed
+    if (pfd.revents & (POLLHUP | POLLERR)) {
+        if (DEBUG) {
+            std::cout << "Connection closed by client" << std::endl;
         }
         return false;
     }

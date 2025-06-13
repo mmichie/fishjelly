@@ -63,7 +63,7 @@ TEST(SocketTest, WriteLineToSocket) {
         
         // Writing to unconnected socket might fail
         // but writeLine doesn't return status
-        socket.writeLine("Test message\n");
+        socket.write_line("Test message\n");
         
         socket.close_socket();
     } catch (...) {
@@ -78,7 +78,7 @@ TEST(SocketTest, HandleError) {
         Socket socket(test_port);
         
         // handleError should log the error message
-        socket.handleError("Test error message");
+        socket.handle_error("Test error message");
         
         socket.close_socket();
     } catch (...) {
