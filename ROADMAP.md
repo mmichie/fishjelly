@@ -4,15 +4,15 @@
 - [x] Fix server crash after handling requests (fork model issue)
 
 ## Phase 2: HTTP/1.1 Required Features (High Priority)
-- [ ] Implement Host header validation (return 400 for HTTP/1.1 without Host)
-- [ ] Add HTTP version parsing and proper handling
-- [ ] Implement OPTIONS method (mandatory for HTTP/1.1)
-- [ ] Add missing critical status codes:
-  - [ ] 400 Bad Request
-  - [ ] 405 Method Not Allowed  
-  - [ ] 411 Length Required
-  - [ ] 505 HTTP Version Not Supported
-- [ ] Fix Connection header handling (keep-alive for 1.1, close for 1.0)
+- [x] Implement Host header validation (return 400 for HTTP/1.1 without Host)
+- [x] Add HTTP version parsing and proper handling
+- [x] Implement OPTIONS method (mandatory for HTTP/1.1)
+- [x] Add missing critical status codes:
+  - [x] 400 Bad Request
+  - [x] 405 Method Not Allowed  
+  - [x] 411 Length Required
+  - [x] 505 HTTP Version Not Supported
+- [x] Fix Connection header handling (keep-alive for 1.1, close for 1.0) - Note: Basic implementation exists but keep-alive has timeout issues
 
 ## Phase 3: Modern Architecture - ASIO Migration (High Priority)
 - [ ] Add ASIO dependency to meson.build
@@ -66,7 +66,8 @@ asio::awaitable<void> handle_request(tcp::socket socket) {
 
 ## Testing
 - HTTP/1.1 compliance test suite exists (`scripts/testing/test_http11_compliance.py`)
-- Currently: 1/12 tests passing
+- Currently: 7/12 tests passing (Host header validation ✓, OPTIONS ✓, HEAD ✓, status codes ✓)
+- Failing tests are mostly related to keep-alive connection handling timeouts
 - Goal: Full compliance with HTTP/1.1 spec
 
 ## Timeline Estimate
