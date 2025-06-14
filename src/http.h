@@ -38,6 +38,11 @@ class Http {
     std::map<std::string, std::string> parseFormUrlEncoded(const std::string& body);
     std::map<std::string, std::string> parseMultipartFormData(const std::string& body, const std::string& boundary);
     std::string getBoundaryFromContentType(const std::string& content_type);
+    std::map<std::string, std::string> parseCookies(const std::string& cookie_header);
+    void setCookie(const std::string& name, const std::string& value, 
+                   const std::string& path = "/", int max_age = -1,
+                   bool secure = false, bool http_only = false,
+                   const std::string& same_site = "");
     void processOptionsRequest(const std::map<std::string, std::string>& headermap, bool keep_alive);
     time_t parseHttpDate(const std::string& date_str);
     bool isModifiedSince(const std::string& filename, time_t since_time);
@@ -48,6 +53,9 @@ class Http {
     
     // Middleware chain
     std::unique_ptr<MiddlewareChain> middleware_chain;
+    
+    // Cookie storage for response
+    std::vector<std::string> response_cookies;
 
   public:
     Http();  // Constructor to initialize middleware

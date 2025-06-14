@@ -1,5 +1,6 @@
 #include "http.h"
 #include <array>
+#include <cctype>
 #include <chrono>
 #include <cstring>
 #include <filesystem>
@@ -397,6 +398,9 @@ bool Http::parseHeader(std::string_view header) {
         return false;
     }
 
+    // Clear response cookies from previous request
+    response_cookies.clear();
+    
     /* Seperate each request header with the name and value and insert into a
      * hash map */
     for (i = 1; i < tokens.size(); i++) {
@@ -870,6 +874,102 @@ std::map<std::string, std::string> Http::parseMultipartFormData(const std::strin
 }
 
 /**
+ * Parse cookies from Cookie header
+ * @param cookie_header The value of the Cookie header
+ * @return Map of cookie name to value
+ */
+std::map<std::string, std::string> Http::parseCookies(const std::string& cookie_header) {
+    std::map<std::string, std::string> cookies;
+    
+    if (cookie_header.empty()) {
+        return cookies;
+    }
+    
+    // Split by semicolon and optional space
+    size_t start = 0;
+    size_t end = 0;
+    
+    while (start < cookie_header.length()) {
+        // Skip whitespace
+        while (start < cookie_header.length() && std::isspace(cookie_header[start])) {
+            start++;
+        }
+        
+        // Find next semicolon
+        end = cookie_header.find(';', start);
+        if (end == std::string::npos) {
+            end = cookie_header.length();
+        }
+        
+        // Extract cookie pair
+        std::string cookie_pair = cookie_header.substr(start, end - start);
+        
+        // Find equals sign
+        size_t equals_pos = cookie_pair.find('=');
+        if (equals_pos != std::string::npos) {
+            std::string name = cookie_pair.substr(0, equals_pos);
+            std::string value = cookie_pair.substr(equals_pos + 1);
+            
+            // Trim whitespace from name and value
+            name.erase(0, name.find_first_not_of(" \t"));
+            name.erase(name.find_last_not_of(" \t") + 1);
+            value.erase(0, value.find_first_not_of(" \t"));
+            value.erase(value.find_last_not_of(" \t") + 1);
+            
+            // Remove quotes if present
+            if (value.length() >= 2 && value.front() == '"' && value.back() == '"') {
+                value = value.substr(1, value.length() - 2);
+            }
+            
+            cookies[name] = value;
+        }
+        
+        start = end + 1;
+    }
+    
+    return cookies;
+}
+
+/**
+ * Set a cookie to be sent in the response
+ * @param name Cookie name
+ * @param value Cookie value
+ * @param path Cookie path (default "/")
+ * @param max_age Max age in seconds (-1 for session cookie)
+ * @param secure Whether cookie should only be sent over HTTPS
+ * @param http_only Whether cookie should be inaccessible to JavaScript
+ * @param same_site SameSite attribute ("Strict", "Lax", "None", or empty)
+ */
+void Http::setCookie(const std::string& name, const std::string& value, 
+                     const std::string& path, int max_age,
+                     bool secure, bool http_only,
+                     const std::string& same_site) {
+    std::string cookie = name + "=" + value;
+    
+    if (!path.empty()) {
+        cookie += "; Path=" + path;
+    }
+    
+    if (max_age >= 0) {
+        cookie += "; Max-Age=" + std::to_string(max_age);
+    }
+    
+    if (secure) {
+        cookie += "; Secure";
+    }
+    
+    if (http_only) {
+        cookie += "; HttpOnly";
+    }
+    
+    if (!same_site.empty()) {
+        cookie += "; SameSite=" + same_site;
+    }
+    
+    response_cookies.push_back(cookie);
+}
+
+/**
  * Processes an HTTP OPTIONS request.
  * Returns allowed methods for the requested resource.
  * @param headermap A map containing parsed HTTP headers.
@@ -950,6 +1050,143 @@ void Http::processGetRequest(const std::map<std::string, std::string>& headermap
     auto it = headermap.find("GET");
     if (it == headermap.end())
         return;
+
+    // Handle cookie demo
+    if (it->second == "/cookie-demo") {
+        // Parse cookies from request
+        std::map<std::string, std::string> cookies;
+        auto cookie_it = headermap.find("Cookie");
+        if (cookie_it != headermap.end()) {
+            cookies = parseCookies(cookie_it->second);
+        }
+        
+        // Generate response
+        std::string response = "<html><head><title>Cookie Demo</title></head><body>\n";
+        response += "<h1>Cookie Demo</h1>\n";
+        
+        // Check if we have a visit count cookie
+        int visit_count = 1;
+        auto count_it = cookies.find("visit_count");
+        if (count_it != cookies.end()) {
+            try {
+                visit_count = std::stoi(count_it->second) + 1;
+            } catch (...) {
+                visit_count = 1;
+            }
+        }
+        
+        response += "<p>Visit count: " + std::to_string(visit_count) + "</p>\n";
+        
+        // Display all cookies
+        response += "<h2>Current Cookies:</h2>\n";
+        if (cookies.empty()) {
+            response += "<p>No cookies set</p>\n";
+        } else {
+            response += "<ul>\n";
+            for (const auto& [name, value] : cookies) {
+                response += "<li>" + name + " = " + value + "</li>\n";
+            }
+            response += "</ul>\n";
+        }
+        
+        response += "<h2>Actions:</h2>\n";
+        response += "<ul>\n";
+        response += "<li><a href='/cookie-demo'>Refresh (increment visit count)</a></li>\n";
+        response += "<li><a href='/set-cookie?name=user&value=john'>Set user=john cookie</a></li>\n";
+        response += "<li><a href='/set-cookie?name=theme&value=dark'>Set theme=dark cookie</a></li>\n";
+        response += "<li><a href='/clear-cookies'>Clear all cookies</a></li>\n";
+        response += "</ul>\n";
+        response += "</body></html>";
+        
+        // Set visit count cookie
+        setCookie("visit_count", std::to_string(visit_count), "/", 3600); // 1 hour
+        
+        // Send response
+        sendHeader(200, response.length(), "text/html", keep_alive);
+        sock->write_line(response);
+        
+        // Log request
+        Log log;
+        log.openLogFile("logs/access_log");
+        auto referer_it = headermap.find("Referer");
+        auto user_agent_it = headermap.find("User-Agent");
+        log.writeLogLine(inet_ntoa(sock->client.sin_addr), std::string(request_line), 200, response.length(),
+                         referer_it != headermap.end() ? referer_it->second : "",
+                         user_agent_it != headermap.end() ? user_agent_it->second : "");
+        log.closeLogFile();
+        return;
+    }
+    
+    // Handle set-cookie endpoint
+    if (it->second.find("/set-cookie") == 0) {
+        std::string query = it->second.substr(11); // Remove "/set-cookie"
+        std::string cookie_name = "test";
+        std::string cookie_value = "value";
+        
+        // Parse query parameters (simple implementation)
+        if (query.length() > 1 && query[0] == '?') {
+            query = query.substr(1);
+            size_t name_pos = query.find("name=");
+            size_t value_pos = query.find("value=");
+            
+            if (name_pos != std::string::npos) {
+                size_t end = query.find('&', name_pos);
+                cookie_name = query.substr(name_pos + 5, end != std::string::npos ? end - (name_pos + 5) : std::string::npos);
+            }
+            
+            if (value_pos != std::string::npos) {
+                size_t end = query.find('&', value_pos);
+                cookie_value = query.substr(value_pos + 6, end != std::string::npos ? end - (value_pos + 6) : std::string::npos);
+            }
+        }
+        
+        // Set the cookie
+        setCookie(cookie_name, cookie_value, "/", 3600); // 1 hour
+        
+        // Redirect back to demo
+        std::string response = "<html><head><meta http-equiv='refresh' content='0;url=/cookie-demo'></head>";
+        response += "<body>Setting cookie and redirecting...</body></html>";
+        
+        sendHeader(200, response.length(), "text/html", keep_alive);
+        sock->write_line(response);
+        
+        // Log request
+        Log log;
+        log.openLogFile("logs/access_log");
+        auto referer_it = headermap.find("Referer");
+        auto user_agent_it = headermap.find("User-Agent");
+        log.writeLogLine(inet_ntoa(sock->client.sin_addr), std::string(request_line), 200, response.length(),
+                         referer_it != headermap.end() ? referer_it->second : "",
+                         user_agent_it != headermap.end() ? user_agent_it->second : "");
+        log.closeLogFile();
+        return;
+    }
+    
+    // Handle clear-cookies endpoint
+    if (it->second == "/clear-cookies") {
+        // Set all cookies to expire
+        setCookie("visit_count", "", "/", 0);
+        setCookie("user", "", "/", 0);
+        setCookie("theme", "", "/", 0);
+        
+        // Redirect back to demo
+        std::string response = "<html><head><meta http-equiv='refresh' content='0;url=/cookie-demo'></head>";
+        response += "<body>Clearing cookies and redirecting...</body></html>";
+        
+        sendHeader(200, response.length(), "text/html", keep_alive);
+        sock->write_line(response);
+        
+        // Log request
+        Log log;
+        log.openLogFile("logs/access_log");
+        auto referer_it = headermap.find("Referer");
+        auto user_agent_it = headermap.find("User-Agent");
+        log.writeLogLine(inet_ntoa(sock->client.sin_addr), std::string(request_line), 200, response.length(),
+                         referer_it != headermap.end() ? referer_it->second : "",
+                         user_agent_it != headermap.end() ? user_agent_it->second : "");
+        log.closeLogFile();
+        return;
+    }
 
     std::string filename = sanitizeFilename(it->second);
     std::filesystem::path filepath(filename);
@@ -1119,6 +1356,12 @@ void Http::sendHeader(int code, int size, std::string_view file_type, bool keep_
 
     headerStream << "Connection: " << (keep_alive ? "keep-alive" : "close") << "\r\n";
     headerStream << "Content-Type: " << file_type << "\r\n";
+    
+    // Add Set-Cookie headers
+    for (const auto& cookie : response_cookies) {
+        headerStream << "Set-Cookie: " << cookie << "\r\n";
+    }
+    
     headerStream << "\r\n";
 
     lastHeader = headerStream.str();
