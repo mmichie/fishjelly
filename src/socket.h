@@ -46,7 +46,7 @@ class Socket {
             server_bind(server_port);
         }
     }
-    
+
     // Virtual destructor
     virtual ~Socket() = default;
 };

@@ -9,7 +9,7 @@
  * Logs requests with timing information
  */
 class LoggingMiddleware : public Middleware {
-public:
+  public:
     void process(RequestContext& ctx, std::function<void()> next) override;
 };
 

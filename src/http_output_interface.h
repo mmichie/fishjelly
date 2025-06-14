@@ -6,18 +6,18 @@
 
 // Abstract interface for HTTP output
 class HttpOutputInterface {
-public:
+  public:
     virtual ~HttpOutputInterface() = default;
-    
+
     // Write a line of text (adds newline if not present)
     virtual void write_line(std::string_view line) = 0;
-    
+
     // Write raw data
     virtual void writeData(const char* data, size_t size) = 0;
-    
+
     // Get the underlying file descriptor (for CGI, returns -1 if not applicable)
     virtual int getFileDescriptor() const { return -1; }
-    
+
     // Get client address for logging
     virtual std::string getClientAddress() const = 0;
 };

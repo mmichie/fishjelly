@@ -69,8 +69,13 @@ run-daemon: build
 .PHONY: format
 format:
 	@echo "Formatting C++ source files..."
-	@find src -name "*.cc" -o -name "*.h" | xargs clang-format -i
-	@echo "Formatting complete."
+	@if command -v clang-format >/dev/null 2>&1; then \
+		find src tests -name "*.cc" -o -name "*.h" | xargs clang-format -i && \
+		echo "Formatting complete."; \
+	else \
+		echo "Error: clang-format not found. Please install it."; \
+		exit 1; \
+	fi
 
 # Alias for format
 .PHONY: fmt
@@ -80,7 +85,27 @@ fmt: format
 .PHONY: format-check
 format-check:
 	@echo "Checking C++ source formatting..."
-	@find src -name "*.cc" -o -name "*.h" | xargs clang-format --dry-run --Werror
+	@if command -v clang-format >/dev/null 2>&1; then \
+		find src tests -name "*.cc" -o -name "*.h" | xargs clang-format --dry-run --Werror && \
+		echo "✓ Code formatting is correct"; \
+	else \
+		echo "Warning: clang-format not found, skipping format check"; \
+	fi
+
+# Run pre-commit checks (compile, test, format)
+.PHONY: pre-commit
+pre-commit: build test format-check
+	@echo "✓ All pre-commit checks passed!"
+
+# Install git pre-commit hook
+.PHONY: install-hooks
+install-hooks:
+	@echo "Installing git pre-commit hook..."
+	@echo '#!/bin/bash' > .git/hooks/pre-commit
+	@echo 'make pre-commit' >> .git/hooks/pre-commit
+	@chmod +x .git/hooks/pre-commit
+	@echo "✓ Pre-commit hook installed"
+	@echo "To skip the hook, use: git commit --no-verify"
 
 # Show help
 .PHONY: help
@@ -95,9 +120,11 @@ help:
 	@echo "  install     - Install the binary"
 	@echo "  run         - Run the server on port 8080"
 	@echo "  run-daemon  - Run the server in daemon mode"
-	@echo "  test        - Run tests (if any)"
+	@echo "  test        - Run tests"
 	@echo "  format/fmt  - Format all source files"
 	@echo "  format-check- Check formatting without modifying"
+	@echo "  pre-commit  - Run all pre-commit checks"
+	@echo "  install-hooks - Install git pre-commit hook"
 	@echo "  help        - Show this help message"
 
 # Run tests

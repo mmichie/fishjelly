@@ -1,4 +1,8 @@
 #include "http.h"
+#include "compression_middleware.h"
+#include "footer_middleware.h"
+#include "logging_middleware.h"
+#include "security_middleware.h"
 #include <array>
 #include <cctype>
 #include <chrono>
@@ -9,10 +13,6 @@
 #include <iostream>
 #include <sstream>
 #include <sys/stat.h>
-#include "footer_middleware.h"
-#include "logging_middleware.h"
-#include "security_middleware.h"
-#include "compression_middleware.h"
 
 /**
  * Constructor - Initialize without middleware by default
@@ -28,17 +28,17 @@ Http::Http() {
 void Http::setupDefaultMiddleware() {
     // Create default middleware chain
     middleware_chain = std::make_unique<MiddlewareChain>();
-    
+
     // Add middleware in order of execution
     // 1. Security checks first
     middleware_chain->use(std::make_shared<SecurityMiddleware>());
-    
+
     // 2. Logging
     middleware_chain->use(std::make_shared<LoggingMiddleware>());
-    
+
     // 3. Compression (after content is generated)
     middleware_chain->use(std::make_shared<CompressionMiddleware>());
-    
+
     // 4. Footer addition (for .shtml files)
     middleware_chain->use(std::make_shared<FooterMiddleware>());
 }
@@ -55,19 +55,20 @@ time_t Http::parseHttpDate(const std::string& date_str) {
     }
     // Set DST flag to -1 to let mktime determine it
     tm.tm_isdst = -1;
-    
+
     // Save current timezone
     char* tz = getenv("TZ");
     std::string old_tz;
-    if (tz) old_tz = tz;
-    
+    if (tz)
+        old_tz = tz;
+
     // Set timezone to UTC
     setenv("TZ", "UTC", 1);
     tzset();
-    
+
     // Convert to time_t
     time_t result = mktime(&tm);
-    
+
     // Restore original timezone
     if (old_tz.empty()) {
         unsetenv("TZ");
@@ -75,7 +76,7 @@ time_t Http::parseHttpDate(const std::string& date_str) {
         setenv("TZ", old_tz.c_str(), 1);
     }
     tzset();
-    
+
     return result;
 }
 
@@ -283,19 +284,20 @@ void Http::sendFileWithMiddleware(std::string_view filename, const std::string& 
     ctx.version = version;
     ctx.headers = headermap;
     ctx.http_handler = this;
-    
+
     // Open file and read content
     std::ifstream file(filename.data(), std::ios::in | std::ios::binary);
     if (!file) {
         ctx.status_code = 404;
-        ctx.response_body = "<html><head><title>404</title></head><body>404 not found</body></html>";
+        ctx.response_body =
+            "<html><head><title>404</title></head><body>404 not found</body></html>";
         ctx.content_type = "text/html";
     } else {
         // Determine File Size
         file.seekg(0, std::ios::end);
         auto size = file.tellg();
         file.seekg(0, std::ios::beg);
-        
+
         // Read entire file
         std::vector<char> buffer(size);
         if (!file.read(buffer.data(), size)) {
@@ -305,26 +307,26 @@ void Http::sendFileWithMiddleware(std::string_view filename, const std::string& 
         } else {
             ctx.status_code = 200;
             ctx.response_body = std::string(buffer.begin(), buffer.end());
-            
+
             // Determine content type
             Mime mime;
             mime.readMimeConfig("mime.types");
             ctx.content_type = mime.getMimeFromExtension(filename);
         }
     }
-    
+
     // Execute middleware chain
     if (middleware_chain) {
         middleware_chain->execute(ctx);
     }
-    
+
     // Send response if not already sent by middleware
     if (!ctx.response_sent) {
         // Send custom headers added by middleware
         for (const auto& [key, value] : ctx.response_headers) {
             sock->write_line(key + ": " + value);
         }
-        
+
         // Send the response body
         if (sock->write_raw(ctx.response_body.data(), ctx.response_body.length()) == -1) {
             perror("send");
@@ -384,7 +386,7 @@ bool Http::parseHeader(std::string_view header) {
 
     // Store method and URI in headermap for backward compatibility
     headermap[method] = uri;
-    
+
     // Validate HTTP version
     if (http_version != "HTTP/1.0" && http_version != "HTTP/1.1") {
         if (DEBUG) {
@@ -400,7 +402,7 @@ bool Http::parseHeader(std::string_view header) {
 
     // Clear response cookies from previous request
     response_cookies.clear();
-    
+
     /* Seperate each request header with the name and value and insert into a
      * hash map */
     for (i = 1; i < tokens.size(); i++) {
@@ -471,20 +473,20 @@ bool Http::parseHeader(std::string_view header) {
             // Send 405 Method Not Allowed with Allow header
             std::ostringstream headerStream;
             headerStream << "HTTP/1.1 405 Method Not Allowed\r\n";
-            
+
             // Generate date header
             std::array<char, 50> buf;
             time_t ltime = time(nullptr);
             struct tm* today = gmtime(&ltime);
             strftime(buf.data(), buf.size(), "%a, %d %b %Y %H:%M:%S GMT", today);
             headerStream << "Date: " << buf.data() << "\r\n";
-            
+
             headerStream << "Server: SHELOB/0.5 (Unix)\r\n";
             headerStream << "Allow: GET, HEAD, POST, OPTIONS\r\n";
             headerStream << "Content-Length: 0\r\n";
             headerStream << "Connection: " << (keep_alive ? "keep-alive" : "close") << "\r\n";
             headerStream << "\r\n";
-            
+
             sock->write_line(headerStream.str());
         }
         return false;
@@ -505,7 +507,8 @@ bool Http::parseHeader(std::string_view header) {
     return keep_alive; // Return keep_alive status for connection handling
 }
 
-void Http::processPostRequest(const std::map<std::string, std::string>& headermap, bool keep_alive) {
+void Http::processPostRequest(const std::map<std::string, std::string>& headermap,
+                              bool keep_alive) {
     // Check for Content-Length header (required for POST)
     auto content_length_it = headermap.find("Content-Length");
     if (content_length_it == headermap.end()) {
@@ -518,7 +521,7 @@ void Http::processPostRequest(const std::map<std::string, std::string>& headerma
         }
         return;
     }
-    
+
     // Parse Content-Length
     int content_length = 0;
     try {
@@ -533,7 +536,7 @@ void Http::processPostRequest(const std::map<std::string, std::string>& headerma
         }
         return;
     }
-    
+
     // Check for negative or excessively large content length
     const int MAX_POST_SIZE = 10 * 1024 * 1024; // 10MB max
     if (content_length < 0 || content_length > MAX_POST_SIZE) {
@@ -546,48 +549,49 @@ void Http::processPostRequest(const std::map<std::string, std::string>& headerma
         }
         return;
     }
-    
+
     // Read the POST body
     std::vector<char> post_body(content_length);
     if (content_length > 0) {
         ssize_t bytes_read = sock->read_raw(post_body.data(), content_length);
         if (bytes_read != content_length) {
             if (DEBUG) {
-                std::cout << "Failed to read complete POST body. Expected: " << content_length 
+                std::cout << "Failed to read complete POST body. Expected: " << content_length
                           << ", Read: " << bytes_read << std::endl;
             }
             if (sock) {
                 sendHeader(400, 0, "text/html", keep_alive);
-                sock->write_line("<html><body>400 Bad Request - Incomplete POST body</body></html>");
+                sock->write_line(
+                    "<html><body>400 Bad Request - Incomplete POST body</body></html>");
             }
             return;
         }
     }
-    
+
     // Convert to string for processing
     std::string body_str(post_body.begin(), post_body.end());
-    
+
     if (DEBUG) {
         std::cout << "POST body (" << content_length << " bytes): " << body_str << std::endl;
     }
-    
+
     // Get the requested URI
     auto post_it = headermap.find("POST");
     if (post_it == headermap.end()) {
         return;
     }
     std::string uri = post_it->second;
-    
+
     // Parse Content-Type
     std::string content_type;
     auto content_type_it = headermap.find("Content-Type");
     if (content_type_it != headermap.end()) {
         content_type = content_type_it->second;
     }
-    
+
     // Parse the POST data based on content type
     std::map<std::string, std::string> post_params;
-    
+
     if (content_type.find("application/x-www-form-urlencoded") != std::string::npos) {
         post_params = parseFormUrlEncoded(body_str);
     } else if (content_type.find("multipart/form-data") != std::string::npos) {
@@ -595,11 +599,11 @@ void Http::processPostRequest(const std::map<std::string, std::string>& headerma
         post_params = parseMultipartFormData(body_str, boundary);
     }
     // For other content types (like application/json), we keep the raw body
-    
+
     // Check if this is a CGI request
     std::string filename = "htdocs" + uri;
     filename = sanitizeFilename(filename);
-    
+
     // Check if file exists and is executable (CGI script)
     struct stat file_stat;
     if (stat(filename.c_str(), &file_stat) == 0 && (file_stat.st_mode & S_IXUSR)) {
@@ -611,17 +615,17 @@ void Http::processPostRequest(const std::map<std::string, std::string>& headerma
         if (!content_type.empty()) {
             cgi_headers["CONTENT_TYPE"] = content_type;
         }
-        
+
         // For CGI, we need to pipe the POST body to stdin
         // This requires modifying the CGI handler to accept POST data
         // For now, we'll send a response indicating CGI POST is not yet fully implemented
         std::string response = "<html><body><h1>501 Not Implemented</h1>\n";
         response += "<p>POST to CGI scripts is not yet fully implemented.</p>\n";
         response += "</body></html>";
-        
+
         sendHeader(501, response.length(), "text/html", keep_alive);
         sock->write_line(response);
-        
+
         // Log the request
         Log log;
         log.openLogFile("logs/access_log");
@@ -633,13 +637,13 @@ void Http::processPostRequest(const std::map<std::string, std::string>& headerma
         log.closeLogFile();
         return;
     }
-    
+
     // For now, return a response showing the parsed POST data
     std::string response = "<html><body><h1>POST Request Received</h1>\n";
     response += "<p>URI: " + uri + "</p>\n";
     response += "<p>Content-Length: " + std::to_string(content_length) + "</p>\n";
     response += "<p>Content-Type: " + content_type + "</p>\n";
-    
+
     if (!post_params.empty()) {
         response += "<h2>Parsed Form Data:</h2>\n<table border='1'>\n";
         response += "<tr><th>Field</th><th>Value</th></tr>\n";
@@ -650,13 +654,13 @@ void Http::processPostRequest(const std::map<std::string, std::string>& headerma
     } else {
         response += "<h2>Raw Body:</h2><pre>" + body_str + "</pre>\n";
     }
-    
+
     response += "</body></html>";
-    
+
     // Send response
     sendHeader(200, response.length(), "text/html", keep_alive);
     sock->write_line(response);
-    
+
     // Log the request
     Log log;
     log.openLogFile("logs/access_log");
@@ -675,10 +679,10 @@ std::map<std::string, std::string> Http::parseFormUrlEncoded(const std::string& 
     std::map<std::string, std::string> params;
     std::string key, value;
     bool parsing_key = true;
-    
+
     for (size_t i = 0; i < body.length(); ++i) {
         char c = body[i];
-        
+
         if (c == '=') {
             parsing_key = false;
         } else if (c == '&') {
@@ -687,7 +691,7 @@ std::map<std::string, std::string> Http::parseFormUrlEncoded(const std::string& 
                 // Simple URL decoding (replace + with space, decode %XX)
                 std::string decoded_key = key;
                 std::string decoded_value = value;
-                
+
                 // Replace + with space
                 size_t pos = 0;
                 while ((pos = decoded_key.find('+', pos)) != std::string::npos) {
@@ -699,7 +703,7 @@ std::map<std::string, std::string> Http::parseFormUrlEncoded(const std::string& 
                     decoded_value[pos] = ' ';
                     pos++;
                 }
-                
+
                 // Decode %XX sequences
                 auto url_decode = [](std::string& str) {
                     size_t pos = 0;
@@ -718,13 +722,13 @@ std::map<std::string, std::string> Http::parseFormUrlEncoded(const std::string& 
                         pos++;
                     }
                 };
-                
+
                 url_decode(decoded_key);
                 url_decode(decoded_value);
-                
+
                 params[decoded_key] = decoded_value;
             }
-            
+
             // Reset for next pair
             key.clear();
             value.clear();
@@ -737,13 +741,13 @@ std::map<std::string, std::string> Http::parseFormUrlEncoded(const std::string& 
             }
         }
     }
-    
+
     // Don't forget the last pair
     if (!key.empty()) {
         // URL decode the last pair
         std::string decoded_key = key;
         std::string decoded_value = value;
-        
+
         // Replace + with space
         size_t pos = 0;
         while ((pos = decoded_key.find('+', pos)) != std::string::npos) {
@@ -755,7 +759,7 @@ std::map<std::string, std::string> Http::parseFormUrlEncoded(const std::string& 
             decoded_value[pos] = ' ';
             pos++;
         }
-        
+
         // Decode %XX sequences
         auto url_decode = [](std::string& str) {
             size_t pos = 0;
@@ -774,13 +778,13 @@ std::map<std::string, std::string> Http::parseFormUrlEncoded(const std::string& 
                 pos++;
             }
         };
-        
+
         url_decode(decoded_key);
         url_decode(decoded_value);
-        
+
         params[decoded_key] = decoded_value;
     }
-    
+
     return params;
 }
 
@@ -792,9 +796,9 @@ std::string Http::getBoundaryFromContentType(const std::string& content_type) {
     if (boundary_pos == std::string::npos) {
         return "";
     }
-    
+
     std::string boundary = content_type.substr(boundary_pos + 9);
-    
+
     // Remove quotes if present
     if (!boundary.empty() && boundary.front() == '"') {
         boundary = boundary.substr(1);
@@ -802,7 +806,7 @@ std::string Http::getBoundaryFromContentType(const std::string& content_type) {
     if (!boundary.empty() && boundary.back() == '"') {
         boundary.pop_back();
     }
-    
+
     return boundary;
 }
 
@@ -810,37 +814,38 @@ std::string Http::getBoundaryFromContentType(const std::string& content_type) {
  * Parse multipart/form-data
  * This is a simplified parser that handles basic text fields
  */
-std::map<std::string, std::string> Http::parseMultipartFormData(const std::string& body, const std::string& boundary) {
+std::map<std::string, std::string> Http::parseMultipartFormData(const std::string& body,
+                                                                const std::string& boundary) {
     std::map<std::string, std::string> params;
-    
+
     if (boundary.empty()) {
         return params;
     }
-    
+
     std::string delimiter = "--" + boundary;
     std::string end_delimiter = "--" + boundary + "--";
-    
+
     size_t pos = 0;
     size_t end_pos = body.find(end_delimiter);
-    
+
     while ((pos = body.find(delimiter, pos)) != std::string::npos && pos < end_pos) {
         pos += delimiter.length();
-        
+
         // Skip CRLF after boundary
         if (pos + 2 <= body.length() && body.substr(pos, 2) == "\r\n") {
             pos += 2;
         }
-        
+
         // Find headers end
         size_t headers_end = body.find("\r\n\r\n", pos);
         if (headers_end == std::string::npos) {
             break;
         }
-        
+
         // Parse headers
         std::string headers = body.substr(pos, headers_end - pos);
         std::string name;
-        
+
         // Extract name from Content-Disposition header
         size_t name_pos = headers.find("name=\"");
         if (name_pos != std::string::npos) {
@@ -850,26 +855,26 @@ std::map<std::string, std::string> Http::parseMultipartFormData(const std::strin
                 name = headers.substr(name_pos, name_end - name_pos);
             }
         }
-        
+
         // Move to content start
         pos = headers_end + 4;
-        
+
         // Find next boundary
         size_t content_end = body.find("\r\n" + delimiter, pos);
         if (content_end == std::string::npos) {
             break;
         }
-        
+
         // Extract content
         std::string content = body.substr(pos, content_end - pos);
-        
+
         if (!name.empty()) {
             params[name] = content;
         }
-        
+
         pos = content_end + 2;
     }
-    
+
     return params;
 }
 
@@ -880,53 +885,53 @@ std::map<std::string, std::string> Http::parseMultipartFormData(const std::strin
  */
 std::map<std::string, std::string> Http::parseCookies(const std::string& cookie_header) {
     std::map<std::string, std::string> cookies;
-    
+
     if (cookie_header.empty()) {
         return cookies;
     }
-    
+
     // Split by semicolon and optional space
     size_t start = 0;
     size_t end = 0;
-    
+
     while (start < cookie_header.length()) {
         // Skip whitespace
         while (start < cookie_header.length() && std::isspace(cookie_header[start])) {
             start++;
         }
-        
+
         // Find next semicolon
         end = cookie_header.find(';', start);
         if (end == std::string::npos) {
             end = cookie_header.length();
         }
-        
+
         // Extract cookie pair
         std::string cookie_pair = cookie_header.substr(start, end - start);
-        
+
         // Find equals sign
         size_t equals_pos = cookie_pair.find('=');
         if (equals_pos != std::string::npos) {
             std::string name = cookie_pair.substr(0, equals_pos);
             std::string value = cookie_pair.substr(equals_pos + 1);
-            
+
             // Trim whitespace from name and value
             name.erase(0, name.find_first_not_of(" \t"));
             name.erase(name.find_last_not_of(" \t") + 1);
             value.erase(0, value.find_first_not_of(" \t"));
             value.erase(value.find_last_not_of(" \t") + 1);
-            
+
             // Remove quotes if present
             if (value.length() >= 2 && value.front() == '"' && value.back() == '"') {
                 value = value.substr(1, value.length() - 2);
             }
-            
+
             cookies[name] = value;
         }
-        
+
         start = end + 1;
     }
-    
+
     return cookies;
 }
 
@@ -940,32 +945,30 @@ std::map<std::string, std::string> Http::parseCookies(const std::string& cookie_
  * @param http_only Whether cookie should be inaccessible to JavaScript
  * @param same_site SameSite attribute ("Strict", "Lax", "None", or empty)
  */
-void Http::setCookie(const std::string& name, const std::string& value, 
-                     const std::string& path, int max_age,
-                     bool secure, bool http_only,
-                     const std::string& same_site) {
+void Http::setCookie(const std::string& name, const std::string& value, const std::string& path,
+                     int max_age, bool secure, bool http_only, const std::string& same_site) {
     std::string cookie = name + "=" + value;
-    
+
     if (!path.empty()) {
         cookie += "; Path=" + path;
     }
-    
+
     if (max_age >= 0) {
         cookie += "; Max-Age=" + std::to_string(max_age);
     }
-    
+
     if (secure) {
         cookie += "; Secure";
     }
-    
+
     if (http_only) {
         cookie += "; HttpOnly";
     }
-    
+
     if (!same_site.empty()) {
         cookie += "; SameSite=" + same_site;
     }
-    
+
     response_cookies.push_back(cookie);
 }
 
@@ -975,16 +978,17 @@ void Http::setCookie(const std::string& name, const std::string& value,
  * @param headermap A map containing parsed HTTP headers.
  * @param keep_alive Whether to keep the connection alive.
  */
-void Http::processOptionsRequest(const std::map<std::string, std::string>& headermap, bool keep_alive) {
+void Http::processOptionsRequest(const std::map<std::string, std::string>& headermap,
+                                 bool keep_alive) {
     auto it = headermap.find("OPTIONS");
     if (it == headermap.end())
         return;
-    
+
     std::string uri = it->second;
-    
+
     // For OPTIONS *, return server-wide capabilities
     // For specific URIs, return methods allowed for that resource
-    
+
     // Send 200 OK with Allow header
     sendOptionsHeader(keep_alive);
 }
@@ -994,7 +998,8 @@ void Http::processOptionsRequest(const std::map<std::string, std::string>& heade
  * @param headermap A map containing parsed HTTP headers.
  * @param keep_alive Whether to keep the connection alive.
  */
-void Http::processHeadRequest(const std::map<std::string, std::string>& headermap, bool keep_alive) {
+void Http::processHeadRequest(const std::map<std::string, std::string>& headermap,
+                              bool keep_alive) {
     auto it = headermap.find("HEAD");
     if (it == headermap.end())
         return;
@@ -1059,11 +1064,11 @@ void Http::processGetRequest(const std::map<std::string, std::string>& headermap
         if (cookie_it != headermap.end()) {
             cookies = parseCookies(cookie_it->second);
         }
-        
+
         // Generate response
         std::string response = "<html><head><title>Cookie Demo</title></head><body>\n";
         response += "<h1>Cookie Demo</h1>\n";
-        
+
         // Check if we have a visit count cookie
         int visit_count = 1;
         auto count_it = cookies.find("visit_count");
@@ -1074,9 +1079,9 @@ void Http::processGetRequest(const std::map<std::string, std::string>& headermap
                 visit_count = 1;
             }
         }
-        
+
         response += "<p>Visit count: " + std::to_string(visit_count) + "</p>\n";
-        
+
         // Display all cookies
         response += "<h2>Current Cookies:</h2>\n";
         if (cookies.empty()) {
@@ -1088,101 +1093,109 @@ void Http::processGetRequest(const std::map<std::string, std::string>& headermap
             }
             response += "</ul>\n";
         }
-        
+
         response += "<h2>Actions:</h2>\n";
         response += "<ul>\n";
         response += "<li><a href='/cookie-demo'>Refresh (increment visit count)</a></li>\n";
-        response += "<li><a href='/set-cookie?name=user&value=john'>Set user=john cookie</a></li>\n";
-        response += "<li><a href='/set-cookie?name=theme&value=dark'>Set theme=dark cookie</a></li>\n";
+        response +=
+            "<li><a href='/set-cookie?name=user&value=john'>Set user=john cookie</a></li>\n";
+        response +=
+            "<li><a href='/set-cookie?name=theme&value=dark'>Set theme=dark cookie</a></li>\n";
         response += "<li><a href='/clear-cookies'>Clear all cookies</a></li>\n";
         response += "</ul>\n";
         response += "</body></html>";
-        
+
         // Set visit count cookie
         setCookie("visit_count", std::to_string(visit_count), "/", 3600); // 1 hour
-        
+
         // Send response
         sendHeader(200, response.length(), "text/html", keep_alive);
         sock->write_line(response);
-        
+
         // Log request
         Log log;
         log.openLogFile("logs/access_log");
         auto referer_it = headermap.find("Referer");
         auto user_agent_it = headermap.find("User-Agent");
-        log.writeLogLine(inet_ntoa(sock->client.sin_addr), std::string(request_line), 200, response.length(),
-                         referer_it != headermap.end() ? referer_it->second : "",
+        log.writeLogLine(inet_ntoa(sock->client.sin_addr), std::string(request_line), 200,
+                         response.length(), referer_it != headermap.end() ? referer_it->second : "",
                          user_agent_it != headermap.end() ? user_agent_it->second : "");
         log.closeLogFile();
         return;
     }
-    
+
     // Handle set-cookie endpoint
     if (it->second.find("/set-cookie") == 0) {
         std::string query = it->second.substr(11); // Remove "/set-cookie"
         std::string cookie_name = "test";
         std::string cookie_value = "value";
-        
+
         // Parse query parameters (simple implementation)
         if (query.length() > 1 && query[0] == '?') {
             query = query.substr(1);
             size_t name_pos = query.find("name=");
             size_t value_pos = query.find("value=");
-            
+
             if (name_pos != std::string::npos) {
                 size_t end = query.find('&', name_pos);
-                cookie_name = query.substr(name_pos + 5, end != std::string::npos ? end - (name_pos + 5) : std::string::npos);
+                cookie_name =
+                    query.substr(name_pos + 5, end != std::string::npos ? end - (name_pos + 5)
+                                                                        : std::string::npos);
             }
-            
+
             if (value_pos != std::string::npos) {
                 size_t end = query.find('&', value_pos);
-                cookie_value = query.substr(value_pos + 6, end != std::string::npos ? end - (value_pos + 6) : std::string::npos);
+                cookie_value =
+                    query.substr(value_pos + 6, end != std::string::npos ? end - (value_pos + 6)
+                                                                         : std::string::npos);
             }
         }
-        
+
         // Set the cookie
         setCookie(cookie_name, cookie_value, "/", 3600); // 1 hour
-        
+
         // Redirect back to demo
-        std::string response = "<html><head><meta http-equiv='refresh' content='0;url=/cookie-demo'></head>";
+        std::string response =
+            "<html><head><meta http-equiv='refresh' content='0;url=/cookie-demo'></head>";
         response += "<body>Setting cookie and redirecting...</body></html>";
-        
+
         sendHeader(200, response.length(), "text/html", keep_alive);
         sock->write_line(response);
-        
+
         // Log request
         Log log;
         log.openLogFile("logs/access_log");
         auto referer_it = headermap.find("Referer");
         auto user_agent_it = headermap.find("User-Agent");
-        log.writeLogLine(inet_ntoa(sock->client.sin_addr), std::string(request_line), 200, response.length(),
-                         referer_it != headermap.end() ? referer_it->second : "",
+        log.writeLogLine(inet_ntoa(sock->client.sin_addr), std::string(request_line), 200,
+                         response.length(), referer_it != headermap.end() ? referer_it->second : "",
                          user_agent_it != headermap.end() ? user_agent_it->second : "");
         log.closeLogFile();
         return;
     }
-    
+
     // Handle clear-cookies endpoint
     if (it->second == "/clear-cookies") {
         // Set all cookies to expire
         setCookie("visit_count", "", "/", 0);
         setCookie("user", "", "/", 0);
         setCookie("theme", "", "/", 0);
-        
+
         // Redirect back to demo
-        std::string response = "<html><head><meta http-equiv='refresh' content='0;url=/cookie-demo'></head>";
+        std::string response =
+            "<html><head><meta http-equiv='refresh' content='0;url=/cookie-demo'></head>";
         response += "<body>Clearing cookies and redirecting...</body></html>";
-        
+
         sendHeader(200, response.length(), "text/html", keep_alive);
         sock->write_line(response);
-        
+
         // Log request
         Log log;
         log.openLogFile("logs/access_log");
         auto referer_it = headermap.find("Referer");
         auto user_agent_it = headermap.find("User-Agent");
-        log.writeLogLine(inet_ntoa(sock->client.sin_addr), std::string(request_line), 200, response.length(),
-                         referer_it != headermap.end() ? referer_it->second : "",
+        log.writeLogLine(inet_ntoa(sock->client.sin_addr), std::string(request_line), 200,
+                         response.length(), referer_it != headermap.end() ? referer_it->second : "",
                          user_agent_it != headermap.end() ? user_agent_it->second : "");
         log.closeLogFile();
         return;
@@ -1199,7 +1212,7 @@ void Http::processGetRequest(const std::map<std::string, std::string>& headermap
     if (!file.is_open()) {
         sendHeader(404, 0, "text/html", false);
         sock->write_line("<html><head><title>404</title></head><body>404 not "
-                        "found</body></html>");
+                         "found</body></html>");
         // sock->close_socket();
         return;
     }
@@ -1244,7 +1257,7 @@ void Http::processGetRequest(const std::map<std::string, std::string>& headermap
        the header and when the file is actually sent through the socket.
     */
     sendHeader(200, size, mime.getMimeFromExtension(filename), keep_alive);
-    
+
     // Use middleware if available, otherwise use legacy sendFile
     if (middleware_chain) {
         sendFileWithMiddleware(filename, "GET", it->second, "HTTP/1.1", headermap);
@@ -1263,7 +1276,7 @@ std::string Http::getHeader(bool use_timeout) {
 
     std::string clientBuffer;
     std::string line;
-    
+
     // For keep-alive connections, use a timeout
     const int KEEPALIVE_TIMEOUT = 5; // 5 seconds timeout
 
@@ -1274,7 +1287,7 @@ std::string Http::getHeader(bool use_timeout) {
     } else {
         read_success = sock->read_line(&line);
     }
-    
+
     while (read_success) {
         if (DEBUG) {
             std::cout << "DEBUG getHeader: Read line [" << line << "]" << std::endl;
@@ -1356,12 +1369,12 @@ void Http::sendHeader(int code, int size, std::string_view file_type, bool keep_
 
     headerStream << "Connection: " << (keep_alive ? "keep-alive" : "close") << "\r\n";
     headerStream << "Content-Type: " << file_type << "\r\n";
-    
+
     // Add Set-Cookie headers
     for (const auto& cookie : response_cookies) {
         headerStream << "Set-Cookie: " << cookie << "\r\n";
     }
-    
+
     headerStream << "\r\n";
 
     lastHeader = headerStream.str();
@@ -1376,34 +1389,34 @@ void Http::sendHeader(int code, int size, std::string_view file_type, bool keep_
  */
 void Http::sendOptionsHeader(bool keep_alive) {
     std::ostringstream headerStream;
-    
+
     // Status line
     headerStream << "HTTP/1.1 200 OK\r\n";
-    
+
     // Generate date header
     std::array<char, 50> buf;
     time_t ltime = time(nullptr);
     struct tm* today = gmtime(&ltime);
     strftime(buf.data(), buf.size(), "%a, %d %b %Y %H:%M:%S GMT", today);
     headerStream << "Date: " << buf.data() << "\r\n";
-    
+
     // Server header
     headerStream << "Server: SHELOB/0.5 (Unix)\r\n";
-    
+
     // Allow header - list supported methods
     headerStream << "Allow: GET, HEAD, POST, OPTIONS\r\n";
-    
+
     // Content-Length must be 0 for OPTIONS
     headerStream << "Content-Length: 0\r\n";
-    
+
     // Connection header
     headerStream << "Connection: " << (keep_alive ? "keep-alive" : "close") << "\r\n";
-    
+
     // Empty line to end headers
     headerStream << "\r\n";
-    
+
     lastHeader = headerStream.str();
-    
+
     if (sock) {
         sock->write_line(lastHeader);
     }

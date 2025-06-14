@@ -1,9 +1,9 @@
 // socket.cc
 #include "socket.h"
-#include <iostream>  // for std::cerr, std::cout
+#include <iostream> // for std::cerr, std::cout
+#include <poll.h>
 #include <stdexcept> // for std::runtime_error
 #include <unistd.h>
-#include <poll.h>
 
 /**
  * SocketException class for specialized socket error handling.
@@ -66,7 +66,7 @@ void Socket::accept_client() {
 
     while (true) {
         accept_fd_ = accept(socket_fd_, reinterpret_cast<struct sockaddr*>(&client),
-                           reinterpret_cast<socklen_t*>(&sin_size_));
+                            reinterpret_cast<socklen_t*>(&sin_size_));
 
         if (accept_fd_ == -1) {
             if (errno == EINTR) {
@@ -136,12 +136,12 @@ bool Socket::read_line(std::string* buffer) {
     // Read one character at a time until we find a newline
     while ((n = recv(accept_fd_, &c, 1, 0)) > 0) {
         buffer->push_back(c);
-        
+
         // Check for line endings
         if (c == '\n') {
             return true;
         }
-        
+
         // For \r, just continue reading - we'll get \n next if it's CRLF
         // This avoids issues with MSG_PEEK
     }
@@ -166,10 +166,10 @@ bool Socket::read_line_with_timeout(std::string* buffer, int timeout_seconds) {
 
     // Convert seconds to milliseconds
     int timeout_ms = timeout_seconds * 1000;
-    
+
     // Wait for data or timeout
     int ret = poll(&pfd, 1, timeout_ms);
-    
+
     if (ret < 0) {
         // Error occurred
         if (DEBUG) {
@@ -183,7 +183,7 @@ bool Socket::read_line_with_timeout(std::string* buffer, int timeout_seconds) {
         }
         return false;
     }
-    
+
     // Check if the connection was closed
     if (pfd.revents & (POLLHUP | POLLERR)) {
         if (DEBUG) {
@@ -191,7 +191,7 @@ bool Socket::read_line_with_timeout(std::string* buffer, int timeout_seconds) {
         }
         return false;
     }
-    
+
     // Data is available, use regular read_line
     return read_line(buffer);
 }

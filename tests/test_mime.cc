@@ -1,13 +1,13 @@
-#include <gtest/gtest.h>
 #include "../src/mime.h"
-#include <fstream>
 #include <filesystem>
+#include <fstream>
+#include <gtest/gtest.h>
 
 class MimeTest : public ::testing::Test {
-protected:
+  protected:
     Mime mime;
     std::string test_config_file;
-    
+
     void SetUp() override {
         // Create a temporary mime config file for testing
         test_config_file = "test_mime.conf";
@@ -22,11 +22,11 @@ protected:
         config << "application/pdf pdf\n";
         config << "text/plain txt\n";
         config.close();
-        
+
         // Load the config
         mime.readMimeConfig(test_config_file);
     }
-    
+
     void TearDown() override {
         // Clean up the test config file
         std::filesystem::remove(test_config_file);
@@ -78,10 +78,10 @@ TEST_F(MimeTest, ReadMimeConfigEmptyFile) {
     std::string empty_config = "empty_mime.conf";
     std::ofstream config(empty_config);
     config.close();
-    
+
     Mime newMime;
     EXPECT_TRUE(newMime.readMimeConfig(empty_config));
-    
+
     std::filesystem::remove(empty_config);
 }
 
@@ -89,7 +89,7 @@ TEST_F(MimeTest, GetMimeFromExtensionCaseSensitive) {
     // Test if extension matching is case sensitive
     std::string uppercase = mime.getMimeFromExtension("test.HTML");
     std::string lowercase = mime.getMimeFromExtension("test.html");
-    
+
     // This test verifies the actual behavior - adjust based on implementation
     // If case-insensitive, both should be equal
     // If case-sensitive, uppercase might return default
