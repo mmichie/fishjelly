@@ -627,14 +627,13 @@ void Http::processPostRequest(const std::map<std::string, std::string>& headerma
         sock->write_line(response);
 
         // Log the request
-        Log log;
+        Log& log = Log::getInstance();
         log.openLogFile("logs/access_log");
         auto referer_it = headermap.find("Referer");
         auto user_agent_it = headermap.find("User-Agent");
         log.writeLogLine(inet_ntoa(sock->client.sin_addr), "POST " + uri, 501, response.length(),
                          referer_it != headermap.end() ? referer_it->second : "",
                          user_agent_it != headermap.end() ? user_agent_it->second : "");
-        log.closeLogFile();
         return;
     }
 
@@ -662,14 +661,13 @@ void Http::processPostRequest(const std::map<std::string, std::string>& headerma
     sock->write_line(response);
 
     // Log the request
-    Log log;
+    Log& log = Log::getInstance();
     log.openLogFile("logs/access_log");
     auto referer_it = headermap.find("Referer");
     auto user_agent_it = headermap.find("User-Agent");
     log.writeLogLine(inet_ntoa(sock->client.sin_addr), "POST " + uri, 200, response.length(),
                      referer_it != headermap.end() ? referer_it->second : "",
                      user_agent_it != headermap.end() ? user_agent_it->second : "");
-    log.closeLogFile();
 }
 
 /**
@@ -1032,15 +1030,14 @@ void Http::processHeadRequest(const std::map<std::string, std::string>& headerma
     file.seekg(0, std::ios::end);
     auto size = file.tellg();
 
-    // TODO: Optimize Log to be a singleton
-    Log log;
+    // Log using singleton
+    Log& log = Log::getInstance();
     log.openLogFile("logs/access_log");
     auto referer_it = headermap.find("Referer");
     auto user_agent_it = headermap.find("User-Agent");
     log.writeLogLine(inet_ntoa(sock->client.sin_addr), "HEAD " + filename, 200, size,
                      referer_it != headermap.end() ? referer_it->second : "",
                      user_agent_it != headermap.end() ? user_agent_it->second : "");
-    log.closeLogFile();
 
     // TODO: Optimize Mime to be a singleton
     Mime mime;
@@ -1113,14 +1110,13 @@ void Http::processGetRequest(const std::map<std::string, std::string>& headermap
         sock->write_line(response);
 
         // Log request
-        Log log;
+        Log& log = Log::getInstance();
         log.openLogFile("logs/access_log");
         auto referer_it = headermap.find("Referer");
         auto user_agent_it = headermap.find("User-Agent");
         log.writeLogLine(inet_ntoa(sock->client.sin_addr), std::string(request_line), 200,
                          response.length(), referer_it != headermap.end() ? referer_it->second : "",
                          user_agent_it != headermap.end() ? user_agent_it->second : "");
-        log.closeLogFile();
         return;
     }
 
@@ -1163,14 +1159,13 @@ void Http::processGetRequest(const std::map<std::string, std::string>& headermap
         sock->write_line(response);
 
         // Log request
-        Log log;
+        Log& log = Log::getInstance();
         log.openLogFile("logs/access_log");
         auto referer_it = headermap.find("Referer");
         auto user_agent_it = headermap.find("User-Agent");
         log.writeLogLine(inet_ntoa(sock->client.sin_addr), std::string(request_line), 200,
                          response.length(), referer_it != headermap.end() ? referer_it->second : "",
                          user_agent_it != headermap.end() ? user_agent_it->second : "");
-        log.closeLogFile();
         return;
     }
 
@@ -1190,14 +1185,13 @@ void Http::processGetRequest(const std::map<std::string, std::string>& headermap
         sock->write_line(response);
 
         // Log request
-        Log log;
+        Log& log = Log::getInstance();
         log.openLogFile("logs/access_log");
         auto referer_it = headermap.find("Referer");
         auto user_agent_it = headermap.find("User-Agent");
         log.writeLogLine(inet_ntoa(sock->client.sin_addr), std::string(request_line), 200,
                          response.length(), referer_it != headermap.end() ? referer_it->second : "",
                          user_agent_it != headermap.end() ? user_agent_it->second : "");
-        log.closeLogFile();
         return;
     }
 
@@ -1239,15 +1233,14 @@ void Http::processGetRequest(const std::map<std::string, std::string>& headermap
         return;
     }
 
-    // TODO: optimize Log to be a singleton
-    Log log;
+    // Log using singleton
+    Log& log = Log::getInstance();
     log.openLogFile("logs/access_log");
     auto referer_it = headermap.find("Referer");
     auto user_agent_it = headermap.find("User-Agent");
     log.writeLogLine(inet_ntoa(sock->client.sin_addr), std::string(request_line), 200, size,
                      referer_it != headermap.end() ? referer_it->second : "",
                      user_agent_it != headermap.end() ? user_agent_it->second : "");
-    log.closeLogFile();
 
     // TODO: optimize Mime to be a singleton
     Mime mime;

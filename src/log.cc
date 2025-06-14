@@ -5,12 +5,30 @@
 #include <iostream>
 #include <sstream>
 
-bool Log::openLogFile(std::string_view filename) {
+// Singleton instance getter - thread safe in C++11
+Log& Log::getInstance() {
+    static Log instance;
+    return instance;
+}
+
+// Destructor - close log file if open
+Log::~Log() {
     if (logfile.is_open()) {
-        if constexpr (DEBUG) {
-            std::cout << "Log file already open!\n";
-        }
+        logfile.close();
+    }
+}
+
+bool Log::openLogFile(std::string_view filename) {
+    std::lock_guard<std::mutex> lock(log_mutex);
+
+    // If already open with the same filename, just return true
+    if (logfile.is_open() && current_filename == filename) {
         return true;
+    }
+
+    // If open with different filename, close current file
+    if (logfile.is_open()) {
+        logfile.close();
     }
 
     // Ensure the directory exists
@@ -21,8 +39,9 @@ bool Log::openLogFile(std::string_view filename) {
 
     logfile.open(std::string(filename), std::ios::out | std::ios::app);
     if (logfile.is_open()) {
+        current_filename = filename;
         if constexpr (DEBUG) {
-            std::cout << "Opened log file\n";
+            std::cout << "Opened log file: " << filename << "\n";
         }
         return true;
     } else {
@@ -51,9 +70,12 @@ std::string Log::makeDate() {
 
 bool Log::writeLogLine(std::string_view ip, std::string_view request, int code, int size,
                        std::string_view referrer, std::string_view agent) {
+    std::lock_guard<std::mutex> lock(log_mutex);
+
     if (logfile.is_open()) {
         logfile << ip << " - - " << makeDate() << " \"" << request << "\" " << code << ' ' << size
                 << " \"" << referrer << "\" \"" << agent << "\"\n";
+        logfile.flush(); // Ensure data is written immediately
         return true;
     } else {
         std::cerr << "Unable to write to logfile\n";

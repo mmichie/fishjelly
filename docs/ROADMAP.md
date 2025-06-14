@@ -70,7 +70,7 @@ This document outlines planned features and improvements for the Fishjelly web s
 ## Code Quality & Performance
 
 - [x] **Fix TODO: POST body processing** (http.cc:518) - ✅ Completed
-- [ ] **Fix TODO: Singleton optimization for Log class** (http.cc:581, 643)
+- [x] **Fix TODO: Singleton optimization for Log class** (http.cc:581, 643) - ✅ Completed
 - [ ] **Fix TODO: Singleton optimization for Mime class** (http.cc:591, 653)
 - [ ] **Fix TODO: Abstract output interface for Http class** (asio_http_connection.cc:15)
 - [ ] **Fix BUG: File size race condition** (http.cc:657)
