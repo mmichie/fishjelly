@@ -574,19 +574,79 @@ void Http::processPostRequest(const std::map<std::string, std::string>& headerma
     }
     std::string uri = post_it->second;
     
-    // Simple echo response for now - in a real implementation, 
-    // this would process the data based on the URI and Content-Type
+    // Parse Content-Type
+    std::string content_type;
+    auto content_type_it = headermap.find("Content-Type");
+    if (content_type_it != headermap.end()) {
+        content_type = content_type_it->second;
+    }
+    
+    // Parse the POST data based on content type
+    std::map<std::string, std::string> post_params;
+    
+    if (content_type.find("application/x-www-form-urlencoded") != std::string::npos) {
+        post_params = parseFormUrlEncoded(body_str);
+    } else if (content_type.find("multipart/form-data") != std::string::npos) {
+        std::string boundary = getBoundaryFromContentType(content_type);
+        post_params = parseMultipartFormData(body_str, boundary);
+    }
+    // For other content types (like application/json), we keep the raw body
+    
+    // Check if this is a CGI request
+    std::string filename = "htdocs" + uri;
+    filename = sanitizeFilename(filename);
+    
+    // Check if file exists and is executable (CGI script)
+    struct stat file_stat;
+    if (stat(filename.c_str(), &file_stat) == 0 && (file_stat.st_mode & S_IXUSR)) {
+        // This is a CGI script - we need to set up the environment and execute it
+        // Create a new headermap with POST data for CGI
+        std::map<std::string, std::string> cgi_headers = headermap;
+        cgi_headers["REQUEST_METHOD"] = "POST";
+        cgi_headers["CONTENT_LENGTH"] = std::to_string(content_length);
+        if (!content_type.empty()) {
+            cgi_headers["CONTENT_TYPE"] = content_type;
+        }
+        
+        // For CGI, we need to pipe the POST body to stdin
+        // This requires modifying the CGI handler to accept POST data
+        // For now, we'll send a response indicating CGI POST is not yet fully implemented
+        std::string response = "<html><body><h1>501 Not Implemented</h1>\n";
+        response += "<p>POST to CGI scripts is not yet fully implemented.</p>\n";
+        response += "</body></html>";
+        
+        sendHeader(501, response.length(), "text/html", keep_alive);
+        sock->write_line(response);
+        
+        // Log the request
+        Log log;
+        log.openLogFile("logs/access_log");
+        auto referer_it = headermap.find("Referer");
+        auto user_agent_it = headermap.find("User-Agent");
+        log.writeLogLine(inet_ntoa(sock->client.sin_addr), "POST " + uri, 501, response.length(),
+                         referer_it != headermap.end() ? referer_it->second : "",
+                         user_agent_it != headermap.end() ? user_agent_it->second : "");
+        log.closeLogFile();
+        return;
+    }
+    
+    // For now, return a response showing the parsed POST data
     std::string response = "<html><body><h1>POST Request Received</h1>\n";
     response += "<p>URI: " + uri + "</p>\n";
     response += "<p>Content-Length: " + std::to_string(content_length) + "</p>\n";
+    response += "<p>Content-Type: " + content_type + "</p>\n";
     
-    // Check Content-Type
-    auto content_type_it = headermap.find("Content-Type");
-    if (content_type_it != headermap.end()) {
-        response += "<p>Content-Type: " + content_type_it->second + "</p>\n";
+    if (!post_params.empty()) {
+        response += "<h2>Parsed Form Data:</h2>\n<table border='1'>\n";
+        response += "<tr><th>Field</th><th>Value</th></tr>\n";
+        for (const auto& [key, value] : post_params) {
+            response += "<tr><td>" + key + "</td><td>" + value + "</td></tr>\n";
+        }
+        response += "</table>\n";
+    } else {
+        response += "<h2>Raw Body:</h2><pre>" + body_str + "</pre>\n";
     }
     
-    response += "<p>Body:</p><pre>" + body_str + "</pre>\n";
     response += "</body></html>";
     
     // Send response
@@ -602,6 +662,211 @@ void Http::processPostRequest(const std::map<std::string, std::string>& headerma
                      referer_it != headermap.end() ? referer_it->second : "",
                      user_agent_it != headermap.end() ? user_agent_it->second : "");
     log.closeLogFile();
+}
+
+/**
+ * Parse application/x-www-form-urlencoded data
+ */
+std::map<std::string, std::string> Http::parseFormUrlEncoded(const std::string& body) {
+    std::map<std::string, std::string> params;
+    std::string key, value;
+    bool parsing_key = true;
+    
+    for (size_t i = 0; i < body.length(); ++i) {
+        char c = body[i];
+        
+        if (c == '=') {
+            parsing_key = false;
+        } else if (c == '&') {
+            // URL decode and store the key-value pair
+            if (!key.empty()) {
+                // Simple URL decoding (replace + with space, decode %XX)
+                std::string decoded_key = key;
+                std::string decoded_value = value;
+                
+                // Replace + with space
+                size_t pos = 0;
+                while ((pos = decoded_key.find('+', pos)) != std::string::npos) {
+                    decoded_key[pos] = ' ';
+                    pos++;
+                }
+                pos = 0;
+                while ((pos = decoded_value.find('+', pos)) != std::string::npos) {
+                    decoded_value[pos] = ' ';
+                    pos++;
+                }
+                
+                // Decode %XX sequences
+                auto url_decode = [](std::string& str) {
+                    size_t pos = 0;
+                    while ((pos = str.find('%', pos)) != std::string::npos) {
+                        if (pos + 2 < str.length()) {
+                            std::string hex = str.substr(pos + 1, 2);
+                            try {
+                                int value = std::stoi(hex, nullptr, 16);
+                                str.replace(pos, 3, 1, static_cast<char>(value));
+                            } catch (...) {
+                                // Invalid hex sequence, skip
+                                pos++;
+                                continue;
+                            }
+                        }
+                        pos++;
+                    }
+                };
+                
+                url_decode(decoded_key);
+                url_decode(decoded_value);
+                
+                params[decoded_key] = decoded_value;
+            }
+            
+            // Reset for next pair
+            key.clear();
+            value.clear();
+            parsing_key = true;
+        } else {
+            if (parsing_key) {
+                key += c;
+            } else {
+                value += c;
+            }
+        }
+    }
+    
+    // Don't forget the last pair
+    if (!key.empty()) {
+        // URL decode the last pair
+        std::string decoded_key = key;
+        std::string decoded_value = value;
+        
+        // Replace + with space
+        size_t pos = 0;
+        while ((pos = decoded_key.find('+', pos)) != std::string::npos) {
+            decoded_key[pos] = ' ';
+            pos++;
+        }
+        pos = 0;
+        while ((pos = decoded_value.find('+', pos)) != std::string::npos) {
+            decoded_value[pos] = ' ';
+            pos++;
+        }
+        
+        // Decode %XX sequences
+        auto url_decode = [](std::string& str) {
+            size_t pos = 0;
+            while ((pos = str.find('%', pos)) != std::string::npos) {
+                if (pos + 2 < str.length()) {
+                    std::string hex = str.substr(pos + 1, 2);
+                    try {
+                        int value = std::stoi(hex, nullptr, 16);
+                        str.replace(pos, 3, 1, static_cast<char>(value));
+                    } catch (...) {
+                        // Invalid hex sequence, skip
+                        pos++;
+                        continue;
+                    }
+                }
+                pos++;
+            }
+        };
+        
+        url_decode(decoded_key);
+        url_decode(decoded_value);
+        
+        params[decoded_key] = decoded_value;
+    }
+    
+    return params;
+}
+
+/**
+ * Extract boundary from Content-Type header
+ */
+std::string Http::getBoundaryFromContentType(const std::string& content_type) {
+    size_t boundary_pos = content_type.find("boundary=");
+    if (boundary_pos == std::string::npos) {
+        return "";
+    }
+    
+    std::string boundary = content_type.substr(boundary_pos + 9);
+    
+    // Remove quotes if present
+    if (!boundary.empty() && boundary.front() == '"') {
+        boundary = boundary.substr(1);
+    }
+    if (!boundary.empty() && boundary.back() == '"') {
+        boundary.pop_back();
+    }
+    
+    return boundary;
+}
+
+/**
+ * Parse multipart/form-data
+ * This is a simplified parser that handles basic text fields
+ */
+std::map<std::string, std::string> Http::parseMultipartFormData(const std::string& body, const std::string& boundary) {
+    std::map<std::string, std::string> params;
+    
+    if (boundary.empty()) {
+        return params;
+    }
+    
+    std::string delimiter = "--" + boundary;
+    std::string end_delimiter = "--" + boundary + "--";
+    
+    size_t pos = 0;
+    size_t end_pos = body.find(end_delimiter);
+    
+    while ((pos = body.find(delimiter, pos)) != std::string::npos && pos < end_pos) {
+        pos += delimiter.length();
+        
+        // Skip CRLF after boundary
+        if (pos + 2 <= body.length() && body.substr(pos, 2) == "\r\n") {
+            pos += 2;
+        }
+        
+        // Find headers end
+        size_t headers_end = body.find("\r\n\r\n", pos);
+        if (headers_end == std::string::npos) {
+            break;
+        }
+        
+        // Parse headers
+        std::string headers = body.substr(pos, headers_end - pos);
+        std::string name;
+        
+        // Extract name from Content-Disposition header
+        size_t name_pos = headers.find("name=\"");
+        if (name_pos != std::string::npos) {
+            name_pos += 6;
+            size_t name_end = headers.find("\"", name_pos);
+            if (name_end != std::string::npos) {
+                name = headers.substr(name_pos, name_end - name_pos);
+            }
+        }
+        
+        // Move to content start
+        pos = headers_end + 4;
+        
+        // Find next boundary
+        size_t content_end = body.find("\r\n" + delimiter, pos);
+        if (content_end == std::string::npos) {
+            break;
+        }
+        
+        // Extract content
+        std::string content = body.substr(pos, content_end - pos);
+        
+        if (!name.empty()) {
+            params[name] = content;
+        }
+        
+        pos = content_end + 2;
+    }
+    
+    return params;
 }
 
 /**

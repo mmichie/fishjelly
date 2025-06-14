@@ -4,7 +4,8 @@
       "Bash(meson compile:*)",
       "Bash(python3:*)",
       "Bash(make:*)",
-      "Bash(ninja:*)"
+      "Bash(ninja:*)",
+      "Bash(grep:*)"
     ],
     "deny": []
   }

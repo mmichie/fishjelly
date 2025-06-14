@@ -35,6 +35,9 @@ class Http {
     void processGetRequest(const std::map<std::string, std::string>& headermap,
                            std::string_view request_line, bool keep_alive);
     void processPostRequest(const std::map<std::string, std::string>& headermap, bool keep_alive);
+    std::map<std::string, std::string> parseFormUrlEncoded(const std::string& body);
+    std::map<std::string, std::string> parseMultipartFormData(const std::string& body, const std::string& boundary);
+    std::string getBoundaryFromContentType(const std::string& content_type);
     void processOptionsRequest(const std::map<std::string, std::string>& headermap, bool keep_alive);
     time_t parseHttpDate(const std::string& date_str);
     bool isModifiedSince(const std::string& filename, time_t since_time);

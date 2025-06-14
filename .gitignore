@@ -37,6 +37,9 @@ Release/
 *.lock
 .DS_Store
 
+# Claude settings
+.claude/settings.local.json
+
 
 Makefile.in
 aclocal.m4
