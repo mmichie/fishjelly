@@ -1199,6 +1199,44 @@ void Http::processGetRequest(const std::map<std::string, std::string>& headermap
     std::filesystem::path filepath(filename);
     std::string file_extension = filepath.extension().string();
 
+    // Try content negotiation if Accept header is present
+    std::vector<std::string> extra_headers;
+    auto accept_it = headermap.find("Accept");
+
+    if (accept_it != headermap.end()) {
+        // Remove extension from path to find base path for variants
+        std::string base_path = filename;
+        if (!file_extension.empty() && file_extension.length() < filename.length()) {
+            base_path = filename.substr(0, filename.length() - file_extension.length());
+        }
+
+        // Try to find variants for the base path
+        auto variants = content_negotiator.findVariants(base_path);
+
+        if (!variants.empty()) {
+            // Variants exist, try content negotiation
+            std::string best_match =
+                content_negotiator.selectBestMatch(base_path, accept_it->second);
+
+            if (!best_match.empty()) {
+                // Found an acceptable variant
+                filename = best_match;
+                filepath = std::filesystem::path(filename);
+                file_extension = filepath.extension().string();
+                extra_headers.push_back("Vary: Accept");
+            } else {
+                // No acceptable variant - return 406 Not Acceptable
+                std::string error_msg = "<html><head><title>406 Not Acceptable</title></head>"
+                                        "<body><h1>406 Not Acceptable</h1>"
+                                        "<p>The requested resource is not available in a format "
+                                        "acceptable to your client.</p></body></html>";
+                sendHeader(406, error_msg.length(), "text/html", keep_alive);
+                sock->write_line(error_msg);
+                return;
+            }
+        }
+    }
+
     // Open file
     std::ifstream file(filename, std::ios::in | std::ios::binary);
 
@@ -1249,7 +1287,7 @@ void Http::processGetRequest(const std::map<std::string, std::string>& headermap
     /* BUG: There is a possible bug where the file size changes between sending
        the header and when the file is actually sent through the socket.
     */
-    sendHeader(200, size, mime.getMimeFromExtension(filename), keep_alive);
+    sendHeader(200, size, mime.getMimeFromExtension(filename), keep_alive, extra_headers);
 
     // Use middleware if available, otherwise use legacy sendFile
     if (middleware_chain) {
@@ -1312,7 +1350,8 @@ std::string Http::getHeader(bool use_timeout) {
 /**
  * Send HTTP headers to the client
  */
-void Http::sendHeader(int code, int size, std::string_view file_type, bool keep_alive) {
+void Http::sendHeader(int code, int size, std::string_view file_type, bool keep_alive,
+                      const std::vector<std::string>& extra_headers) {
     assert(code > 99 && code < 600);
     assert(size >= 0);
 
@@ -1330,6 +1369,9 @@ void Http::sendHeader(int code, int size, std::string_view file_type, bool keep_
         break;
     case 404:
         headerStream << "HTTP/1.1 404 Not Found\r\n";
+        break;
+    case 406:
+        headerStream << "HTTP/1.1 406 Not Acceptable\r\n";
         break;
     case 411:
         headerStream << "HTTP/1.1 411 Length Required\r\n";
@@ -1366,6 +1408,11 @@ void Http::sendHeader(int code, int size, std::string_view file_type, bool keep_
     // Add Set-Cookie headers
     for (const auto& cookie : response_cookies) {
         headerStream << "Set-Cookie: " << cookie << "\r\n";
+    }
+
+    // Add extra headers
+    for (const auto& header : extra_headers) {
+        headerStream << header << "\r\n";
     }
 
     headerStream << "\r\n";

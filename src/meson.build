@@ -30,7 +30,9 @@ lib_sources = files(
   'security_middleware.h',
   'security_middleware.cc',
   'compression_middleware.h',
-  'compression_middleware.cc'
+  'compression_middleware.cc',
+  'content_negotiator.h',
+  'content_negotiator.cc'
 )
 
 # Create static library for testing

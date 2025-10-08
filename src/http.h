@@ -12,6 +12,7 @@
 #include "global.h"
 
 #include "cgi.h"
+#include "content_negotiator.h"
 #include "filter.h"
 #include "log.h"
 #include "middleware.h"
@@ -58,11 +59,14 @@ class Http {
     // Cookie storage for response
     std::vector<std::string> response_cookies;
 
+    // Content negotiation
+    ContentNegotiator content_negotiator;
+
   public:
     Http(); // Constructor to initialize middleware
 
     void sendHeader(int code, int size, std::string_view file_type = "text/plain",
-                    bool keep_alive = false);
+                    bool keep_alive = false, const std::vector<std::string>& extra_headers = {});
     void sendOptionsHeader(bool keep_alive = false);
     std::string getHeader(bool use_timeout = false);
     void start(int server_port);

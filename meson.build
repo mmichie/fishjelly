@@ -59,7 +59,8 @@ if clang_tidy.found()
     'src/footer_middleware.cc',
     'src/logging_middleware.cc',
     'src/security_middleware.cc',
-    'src/compression_middleware.cc'
+    'src/compression_middleware.cc',
+    'src/content_negotiator.cc'
   )
   
   # Add clang-tidy target

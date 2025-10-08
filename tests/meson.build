@@ -13,7 +13,8 @@ if gtest_dep.found()
     'test_http.cc',
     'test_mime.cc',
     'test_socket.cc',
-    'test_filter.cc'
+    'test_filter.cc',
+    'test_content_negotiator.cc'
   ]
 
   # Create test executables

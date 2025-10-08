@@ -109,3 +109,32 @@ TEST_F(HttpTest, ParseHeaderWithBody) {
     // Header parsing should stop at empty line
     EXPECT_TRUE(http.parseHeader(header));
 }
+
+// Content Negotiation Tests
+TEST_F(HttpTest, SendHeaderWithVaryHeader) {
+    std::vector<std::string> extra_headers = {"Vary: Accept"};
+    http.sendHeader(200, 100, "application/json", true, extra_headers);
+    std::string header = http.getHeader();
+
+    EXPECT_TRUE(header.find("Vary: Accept") != std::string::npos);
+    EXPECT_TRUE(header.find("Content-Type: application/json") != std::string::npos);
+}
+
+TEST_F(HttpTest, SendHeaderNotAcceptable) {
+    http.sendHeader(406, 0, "text/html", false);
+    std::string header = http.getHeader();
+
+    EXPECT_TRUE(header.find("HTTP/1.1 406") != std::string::npos);
+    EXPECT_TRUE(header.find("Not Acceptable") != std::string::npos);
+}
+
+TEST_F(HttpTest, SendHeaderMultipleExtraHeaders) {
+    std::vector<std::string> extra_headers = {"Vary: Accept", "Vary: Accept-Language",
+                                              "Cache-Control: public, max-age=3600"};
+    http.sendHeader(200, 500, "text/html", true, extra_headers);
+    std::string header = http.getHeader();
+
+    EXPECT_TRUE(header.find("Vary: Accept") != std::string::npos);
+    EXPECT_TRUE(header.find("Vary: Accept-Language") != std::string::npos);
+    EXPECT_TRUE(header.find("Cache-Control: public, max-age=3600") != std::string::npos);
+}
