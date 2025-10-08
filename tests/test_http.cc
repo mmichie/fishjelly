@@ -138,3 +138,48 @@ TEST_F(HttpTest, SendHeaderMultipleExtraHeaders) {
     EXPECT_TRUE(header.find("Vary: Accept-Language") != std::string::npos);
     EXPECT_TRUE(header.find("Cache-Control: public, max-age=3600") != std::string::npos);
 }
+
+// PUT/DELETE Method Tests
+TEST_F(HttpTest, SendHeader201Created) {
+    std::vector<std::string> headers = {"Location: /api/resource/123"};
+    http.sendHeader(201, 0, "text/plain", false, headers);
+    std::string header = http.getHeader();
+
+    EXPECT_TRUE(header.find("HTTP/1.1 201") != std::string::npos);
+    EXPECT_TRUE(header.find("Created") != std::string::npos);
+    EXPECT_TRUE(header.find("Location: /api/resource/123") != std::string::npos);
+}
+
+TEST_F(HttpTest, SendHeader204NoContent) {
+    http.sendHeader(204, 0, "text/plain", false);
+    std::string header = http.getHeader();
+
+    EXPECT_TRUE(header.find("HTTP/1.1 204") != std::string::npos);
+    EXPECT_TRUE(header.find("No Content") != std::string::npos);
+}
+
+TEST_F(HttpTest, ParseHeaderValidPut) {
+    std::string header = "PUT /api/resource HTTP/1.1\r\n"
+                         "Host: example.com\r\n"
+                         "Content-Length: 13\r\n"
+                         "\r\n";
+
+    EXPECT_TRUE(http.parseHeader(header));
+}
+
+TEST_F(HttpTest, ParseHeaderValidDelete) {
+    std::string header = "DELETE /api/resource HTTP/1.1\r\n"
+                         "Host: example.com\r\n"
+                         "\r\n";
+
+    EXPECT_TRUE(http.parseHeader(header));
+}
+
+TEST_F(HttpTest, ParseHeaderUnsupportedMethod) {
+    std::string header = "PATCH /api/resource HTTP/1.1\r\n"
+                         "Host: example.com\r\n"
+                         "\r\n";
+
+    // Should return false for unsupported methods
+    EXPECT_FALSE(http.parseHeader(header));
+}

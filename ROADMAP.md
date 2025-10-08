@@ -29,8 +29,8 @@
 - [x] Implement If-Modified-Since and 304 Not Modified
 - [x] Add proper POST request body handling with Content-Length
 - [x] Add basic content negotiation (Accept headers)
+- [x] Implement PUT and DELETE methods
 - [ ] Implement chunked transfer encoding support
-- [ ] Implement PUT and DELETE methods
 - [ ] Add timeout handling for slow clients
 - [ ] Implement connection pooling for keep-alive
 

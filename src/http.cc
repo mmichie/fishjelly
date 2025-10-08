@@ -465,7 +465,8 @@ bool Http::parseHeader(std::string_view header) {
 
     // Check if we have a valid request method
     if (headermap.find("GET") == headermap.end() && headermap.find("HEAD") == headermap.end() &&
-        headermap.find("POST") == headermap.end() && headermap.find("OPTIONS") == headermap.end()) {
+        headermap.find("POST") == headermap.end() && headermap.find("OPTIONS") == headermap.end() &&
+        headermap.find("PUT") == headermap.end() && headermap.find("DELETE") == headermap.end()) {
         if (DEBUG) {
             std::cout << "No valid request method found in headermap" << std::endl;
         }
@@ -482,7 +483,7 @@ bool Http::parseHeader(std::string_view header) {
             headerStream << "Date: " << buf.data() << "\r\n";
 
             headerStream << "Server: SHELOB/0.5 (Unix)\r\n";
-            headerStream << "Allow: GET, HEAD, POST, OPTIONS\r\n";
+            headerStream << "Allow: GET, HEAD, POST, OPTIONS, PUT, DELETE\r\n";
             headerStream << "Content-Length: 0\r\n";
             headerStream << "Connection: " << (keep_alive ? "keep-alive" : "close") << "\r\n";
             headerStream << "\r\n";
@@ -499,6 +500,10 @@ bool Http::parseHeader(std::string_view header) {
             processHeadRequest(headermap, keep_alive);
         } else if (headermap.find("POST") != headermap.end()) {
             processPostRequest(headermap, keep_alive);
+        } else if (headermap.find("PUT") != headermap.end()) {
+            processPutRequest(headermap, request_line, keep_alive);
+        } else if (headermap.find("DELETE") != headermap.end()) {
+            processDeleteRequest(headermap, request_line, keep_alive);
         } else if (headermap.find("OPTIONS") != headermap.end()) {
             processOptionsRequest(headermap, keep_alive);
         }
@@ -666,6 +671,142 @@ void Http::processPostRequest(const std::map<std::string, std::string>& headerma
     auto referer_it = headermap.find("Referer");
     auto user_agent_it = headermap.find("User-Agent");
     log.writeLogLine(inet_ntoa(sock->client.sin_addr), "POST " + uri, 200, response.length(),
+                     referer_it != headermap.end() ? referer_it->second : "",
+                     user_agent_it != headermap.end() ? user_agent_it->second : "");
+}
+
+/**
+ * Handle HTTP PUT request - create or update a resource
+ */
+void Http::processPutRequest(const std::map<std::string, std::string>& headermap,
+                             std::string_view request_line, bool keep_alive) {
+    auto put_it = headermap.find("PUT");
+    if (put_it == headermap.end()) {
+        return;
+    }
+
+    std::string uri = put_it->second;
+    std::string filename = sanitizeFilename(uri);
+
+    // Check if Content-Length is present
+    auto content_length_it = headermap.find("Content-Length");
+    if (content_length_it == headermap.end()) {
+        sendHeader(411, 0, "text/plain", keep_alive);
+        return;
+    }
+
+    // Read the request body
+    int content_length = std::stoi(content_length_it->second);
+    if (content_length < 0 || content_length > 10 * 1024 * 1024) { // 10MB limit
+        sendHeader(413, 0, "text/plain", keep_alive);
+        return;
+    }
+
+    std::string body;
+    if (content_length > 0) {
+        std::vector<char> buffer(content_length);
+        ssize_t bytes_read = sock->read_raw(buffer.data(), content_length);
+        if (bytes_read < content_length) {
+            sendHeader(400, 0, "text/plain", keep_alive);
+            return;
+        }
+        body = std::string(buffer.data(), content_length);
+    }
+
+    // Check if file exists to determine response code
+    bool file_exists = std::filesystem::exists(filename);
+
+    // Write content to file
+    std::ofstream outfile(filename, std::ios::binary | std::ios::trunc);
+    if (!outfile.is_open()) {
+        // Cannot write file - return 500 Internal Server Error
+        std::string error_msg = "<html><head><title>500 Internal Server Error</title></head>"
+                                "<body><h1>500 Internal Server Error</h1>"
+                                "<p>Could not write to the specified resource.</p></body></html>";
+        sendHeader(500, error_msg.length(), "text/html", keep_alive);
+        sock->write_line(error_msg);
+        return;
+    }
+
+    outfile.write(body.c_str(), body.length());
+    outfile.close();
+
+    // Return 201 Created if new file, 200 OK if updated
+    int status_code = file_exists ? 200 : 201;
+
+    if (status_code == 201) {
+        // Include Location header for newly created resource
+        std::vector<std::string> headers = {"Location: " + uri};
+        sendHeader(201, 0, "text/plain", keep_alive, headers);
+    } else {
+        sendHeader(200, 0, "text/plain", keep_alive);
+    }
+
+    // Log the request
+    Log& log = Log::getInstance();
+    log.openLogFile("logs/access_log");
+    auto referer_it = headermap.find("Referer");
+    auto user_agent_it = headermap.find("User-Agent");
+    log.writeLogLine(inet_ntoa(sock->client.sin_addr), std::string(request_line), status_code, 0,
+                     referer_it != headermap.end() ? referer_it->second : "",
+                     user_agent_it != headermap.end() ? user_agent_it->second : "");
+}
+
+/**
+ * Handle HTTP DELETE request - delete a resource
+ */
+void Http::processDeleteRequest(const std::map<std::string, std::string>& headermap,
+                                std::string_view request_line, bool keep_alive) {
+    auto delete_it = headermap.find("DELETE");
+    if (delete_it == headermap.end()) {
+        return;
+    }
+
+    std::string uri = delete_it->second;
+    std::string filename = sanitizeFilename(uri);
+
+    // Check if file exists
+    if (!std::filesystem::exists(filename)) {
+        std::string error_msg = "<html><head><title>404 Not Found</title></head>"
+                                "<body><h1>404 Not Found</h1>"
+                                "<p>The requested resource does not exist.</p></body></html>";
+        sendHeader(404, error_msg.length(), "text/html", keep_alive);
+        sock->write_line(error_msg);
+
+        // Log the request
+        Log& log = Log::getInstance();
+        log.openLogFile("logs/access_log");
+        auto referer_it = headermap.find("Referer");
+        auto user_agent_it = headermap.find("User-Agent");
+        log.writeLogLine(inet_ntoa(sock->client.sin_addr), std::string(request_line), 404, 0,
+                         referer_it != headermap.end() ? referer_it->second : "",
+                         user_agent_it != headermap.end() ? user_agent_it->second : "");
+        return;
+    }
+
+    // Delete the file
+    std::error_code ec;
+    bool removed = std::filesystem::remove(filename, ec);
+
+    if (!removed || ec) {
+        // Could not delete file - return 500 Internal Server Error
+        std::string error_msg = "<html><head><title>500 Internal Server Error</title></head>"
+                                "<body><h1>500 Internal Server Error</h1>"
+                                "<p>Could not delete the specified resource.</p></body></html>";
+        sendHeader(500, error_msg.length(), "text/html", keep_alive);
+        sock->write_line(error_msg);
+        return;
+    }
+
+    // Return 204 No Content on successful deletion
+    sendHeader(204, 0, "text/plain", keep_alive);
+
+    // Log the request
+    Log& log = Log::getInstance();
+    log.openLogFile("logs/access_log");
+    auto referer_it = headermap.find("Referer");
+    auto user_agent_it = headermap.find("User-Agent");
+    log.writeLogLine(inet_ntoa(sock->client.sin_addr), std::string(request_line), 204, 0,
                      referer_it != headermap.end() ? referer_it->second : "",
                      user_agent_it != headermap.end() ? user_agent_it->second : "");
 }
@@ -1360,6 +1501,12 @@ void Http::sendHeader(int code, int size, std::string_view file_type, bool keep_
     switch (code) {
     case 200:
         headerStream << "HTTP/1.1 200 OK\r\n";
+        break;
+    case 201:
+        headerStream << "HTTP/1.1 201 Created\r\n";
+        break;
+    case 204:
+        headerStream << "HTTP/1.1 204 No Content\r\n";
         break;
     case 304:
         headerStream << "HTTP/1.1 304 Not Modified\r\n";
