@@ -40,6 +40,9 @@ class Http {
                            std::string_view request_line, bool keep_alive);
     void processDeleteRequest(const std::map<std::string, std::string>& headermap,
                               std::string_view request_line, bool keep_alive);
+    std::string readChunkedBody();
+    void writeChunkedData(std::string_view data);
+    void writeChunkedEnd();
     std::map<std::string, std::string> parseFormUrlEncoded(const std::string& body);
     std::map<std::string, std::string> parseMultipartFormData(const std::string& body,
                                                               const std::string& boundary);

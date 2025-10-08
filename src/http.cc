@@ -514,70 +514,90 @@ bool Http::parseHeader(std::string_view header) {
 
 void Http::processPostRequest(const std::map<std::string, std::string>& headermap,
                               bool keep_alive) {
-    // Check for Content-Length header (required for POST)
-    auto content_length_it = headermap.find("Content-Length");
-    if (content_length_it == headermap.end()) {
-        if (DEBUG) {
-            std::cout << "POST request without Content-Length header" << std::endl;
-        }
-        if (sock) {
-            sendHeader(411, 0, "text/html", keep_alive);
-            sock->write_line("<html><body>411 Length Required</body></html>");
-        }
-        return;
+    // Check for Transfer-Encoding header
+    auto transfer_encoding_it = headermap.find("Transfer-Encoding");
+    bool is_chunked = false;
+    if (transfer_encoding_it != headermap.end() &&
+        transfer_encoding_it->second.find("chunked") != std::string::npos) {
+        is_chunked = true;
     }
 
-    // Parse Content-Length
-    int content_length = 0;
-    try {
-        content_length = std::stoi(content_length_it->second);
-    } catch (const std::exception& e) {
-        if (DEBUG) {
-            std::cout << "Invalid Content-Length value: " << content_length_it->second << std::endl;
-        }
-        if (sock) {
-            sendHeader(400, 0, "text/html", keep_alive);
-            sock->write_line("<html><body>400 Bad Request - Invalid Content-Length</body></html>");
-        }
-        return;
-    }
+    std::string body_str;
 
-    // Check for negative or excessively large content length
-    const int MAX_POST_SIZE = 10 * 1024 * 1024; // 10MB max
-    if (content_length < 0 || content_length > MAX_POST_SIZE) {
-        if (DEBUG) {
-            std::cout << "Invalid Content-Length: " << content_length << std::endl;
-        }
-        if (sock) {
-            sendHeader(413, 0, "text/html", keep_alive);
-            sock->write_line("<html><body>413 Request Entity Too Large</body></html>");
-        }
-        return;
-    }
-
-    // Read the POST body
-    std::vector<char> post_body(content_length);
-    if (content_length > 0) {
-        ssize_t bytes_read = sock->read_raw(post_body.data(), content_length);
-        if (bytes_read != content_length) {
+    if (is_chunked) {
+        // Read chunked body
+        body_str = readChunkedBody();
+        // Note: empty body is valid for chunked encoding
+        // readChunkedBody() sends error responses if needed
+    } else {
+        // Check for Content-Length header (required for POST when not chunked)
+        auto content_length_it = headermap.find("Content-Length");
+        if (content_length_it == headermap.end()) {
             if (DEBUG) {
-                std::cout << "Failed to read complete POST body. Expected: " << content_length
-                          << ", Read: " << bytes_read << std::endl;
+                std::cout << "POST request without Content-Length or Transfer-Encoding header"
+                          << std::endl;
+            }
+            if (sock) {
+                sendHeader(411, 0, "text/html", keep_alive);
+                sock->write_line("<html><body>411 Length Required</body></html>");
+            }
+            return;
+        }
+
+        // Parse Content-Length
+        int content_length = 0;
+        try {
+            content_length = std::stoi(content_length_it->second);
+        } catch (const std::exception& e) {
+            if (DEBUG) {
+                std::cout << "Invalid Content-Length value: " << content_length_it->second
+                          << std::endl;
             }
             if (sock) {
                 sendHeader(400, 0, "text/html", keep_alive);
                 sock->write_line(
-                    "<html><body>400 Bad Request - Incomplete POST body</body></html>");
+                    "<html><body>400 Bad Request - Invalid Content-Length</body></html>");
             }
             return;
         }
+
+        // Check for negative or excessively large content length
+        const int MAX_POST_SIZE = 10 * 1024 * 1024; // 10MB max
+        if (content_length < 0 || content_length > MAX_POST_SIZE) {
+            if (DEBUG) {
+                std::cout << "Invalid Content-Length: " << content_length << std::endl;
+            }
+            if (sock) {
+                sendHeader(413, 0, "text/html", keep_alive);
+                sock->write_line("<html><body>413 Request Entity Too Large</body></html>");
+            }
+            return;
+        }
+
+        // Read the POST body
+        std::vector<char> post_body(content_length);
+        if (content_length > 0) {
+            ssize_t bytes_read = sock->read_raw(post_body.data(), content_length);
+            if (bytes_read != content_length) {
+                if (DEBUG) {
+                    std::cout << "Failed to read complete POST body. Expected: " << content_length
+                              << ", Read: " << bytes_read << std::endl;
+                }
+                if (sock) {
+                    sendHeader(400, 0, "text/html", keep_alive);
+                    sock->write_line(
+                        "<html><body>400 Bad Request - Incomplete POST body</body></html>");
+                }
+                return;
+            }
+        }
+
+        // Convert to string for processing
+        body_str = std::string(post_body.begin(), post_body.end());
     }
 
-    // Convert to string for processing
-    std::string body_str(post_body.begin(), post_body.end());
-
     if (DEBUG) {
-        std::cout << "POST body (" << content_length << " bytes): " << body_str << std::endl;
+        std::cout << "POST body (" << body_str.length() << " bytes): " << body_str << std::endl;
     }
 
     // Get the requested URI
@@ -616,7 +636,7 @@ void Http::processPostRequest(const std::map<std::string, std::string>& headerma
         // Create a new headermap with POST data for CGI
         std::map<std::string, std::string> cgi_headers = headermap;
         cgi_headers["REQUEST_METHOD"] = "POST";
-        cgi_headers["CONTENT_LENGTH"] = std::to_string(content_length);
+        cgi_headers["CONTENT_LENGTH"] = std::to_string(body_str.length());
         if (!content_type.empty()) {
             cgi_headers["CONTENT_TYPE"] = content_type;
         }
@@ -645,7 +665,7 @@ void Http::processPostRequest(const std::map<std::string, std::string>& headerma
     // For now, return a response showing the parsed POST data
     std::string response = "<html><body><h1>POST Request Received</h1>\n";
     response += "<p>URI: " + uri + "</p>\n";
-    response += "<p>Content-Length: " + std::to_string(content_length) + "</p>\n";
+    response += "<p>Content-Length: " + std::to_string(body_str.length()) + "</p>\n";
     response += "<p>Content-Type: " + content_type + "</p>\n";
 
     if (!post_params.empty()) {
@@ -688,29 +708,45 @@ void Http::processPutRequest(const std::map<std::string, std::string>& headermap
     std::string uri = put_it->second;
     std::string filename = sanitizeFilename(uri);
 
-    // Check if Content-Length is present
-    auto content_length_it = headermap.find("Content-Length");
-    if (content_length_it == headermap.end()) {
-        sendHeader(411, 0, "text/plain", keep_alive);
-        return;
-    }
-
-    // Read the request body
-    int content_length = std::stoi(content_length_it->second);
-    if (content_length < 0 || content_length > 10 * 1024 * 1024) { // 10MB limit
-        sendHeader(413, 0, "text/plain", keep_alive);
-        return;
+    // Check for Transfer-Encoding header
+    auto transfer_encoding_it = headermap.find("Transfer-Encoding");
+    bool is_chunked = false;
+    if (transfer_encoding_it != headermap.end() &&
+        transfer_encoding_it->second.find("chunked") != std::string::npos) {
+        is_chunked = true;
     }
 
     std::string body;
-    if (content_length > 0) {
-        std::vector<char> buffer(content_length);
-        ssize_t bytes_read = sock->read_raw(buffer.data(), content_length);
-        if (bytes_read < content_length) {
-            sendHeader(400, 0, "text/plain", keep_alive);
+
+    if (is_chunked) {
+        // Read chunked body
+        body = readChunkedBody();
+        // Note: empty body is valid for chunked encoding
+        // readChunkedBody() sends error responses if needed
+    } else {
+        // Check if Content-Length is present
+        auto content_length_it = headermap.find("Content-Length");
+        if (content_length_it == headermap.end()) {
+            sendHeader(411, 0, "text/plain", keep_alive);
             return;
         }
-        body = std::string(buffer.data(), content_length);
+
+        // Read the request body
+        int content_length = std::stoi(content_length_it->second);
+        if (content_length < 0 || content_length > 10 * 1024 * 1024) { // 10MB limit
+            sendHeader(413, 0, "text/plain", keep_alive);
+            return;
+        }
+
+        if (content_length > 0) {
+            std::vector<char> buffer(content_length);
+            ssize_t bytes_read = sock->read_raw(buffer.data(), content_length);
+            if (bytes_read < content_length) {
+                sendHeader(400, 0, "text/plain", keep_alive);
+                return;
+            }
+            body = std::string(buffer.data(), content_length);
+        }
     }
 
     // Check if file exists to determine response code
@@ -809,6 +845,102 @@ void Http::processDeleteRequest(const std::map<std::string, std::string>& header
     log.writeLogLine(inet_ntoa(sock->client.sin_addr), std::string(request_line), 204, 0,
                      referer_it != headermap.end() ? referer_it->second : "",
                      user_agent_it != headermap.end() ? user_agent_it->second : "");
+}
+
+/**
+ * Read a chunked request body according to RFC 7230
+ * Returns the complete body with chunks decoded
+ */
+std::string Http::readChunkedBody() {
+    std::string body;
+    std::string line;
+
+    while (true) {
+        // Read chunk size line (hex number followed by CRLF)
+        if (!sock->read_line(&line)) {
+            break;
+        }
+
+        // Parse chunk size (ignore any chunk extensions after semicolon)
+        size_t semicolon_pos = line.find(';');
+        std::string size_str =
+            semicolon_pos != std::string::npos ? line.substr(0, semicolon_pos) : line;
+
+        // Remove whitespace
+        size_str.erase(0, size_str.find_first_not_of(" \t"));
+        size_str.erase(size_str.find_last_not_of(" \t\r\n") + 1);
+
+        // Convert hex string to integer
+        size_t chunk_size;
+        try {
+            chunk_size = std::stoull(size_str, nullptr, 16);
+        } catch (...) {
+            // Invalid chunk size - send 400 Bad Request
+            std::string error_msg = "400 Bad Request - Invalid chunk size\n";
+            sendHeader(400, error_msg.length(), "text/plain");
+            sock->write_line(error_msg);
+            return "";
+        }
+
+        // Chunk size of 0 indicates end of chunks
+        if (chunk_size == 0) {
+            // Read trailing headers (if any) until empty line
+            while (true) {
+                if (!sock->read_line(&line)) {
+                    break;
+                }
+                if (line.empty() || line == "\r\n" || line == "\n") {
+                    break;
+                }
+            }
+            break;
+        }
+
+        // Read chunk data
+        std::vector<char> chunk_data(chunk_size);
+        ssize_t bytes_read = sock->read_raw(chunk_data.data(), chunk_size);
+        if (bytes_read < static_cast<ssize_t>(chunk_size)) {
+            // Incomplete chunk - send 400 Bad Request
+            std::string error_msg = "400 Bad Request - Incomplete chunk data\n";
+            sendHeader(400, error_msg.length(), "text/plain");
+            sock->write_line(error_msg);
+            return "";
+        }
+
+        body.append(chunk_data.data(), chunk_size);
+
+        // Read trailing CRLF after chunk data
+        sock->read_line(&line);
+    }
+
+    return body;
+}
+
+/**
+ * Write data as a chunked chunk
+ */
+void Http::writeChunkedData(std::string_view data) {
+    if (data.empty()) {
+        return;
+    }
+
+    // Write chunk size in hex followed by CRLF
+    std::string chunk_header = std::format("{:x}\r\n", data.size());
+    sock->write_raw(chunk_header.c_str(), chunk_header.length());
+
+    // Write chunk data
+    sock->write_raw(data.data(), data.size());
+
+    // Write trailing CRLF
+    sock->write_raw("\r\n", 2);
+}
+
+/**
+ * Write the final 0-sized chunk to end chunked encoding
+ */
+void Http::writeChunkedEnd() {
+    // Send 0-sized chunk followed by CRLF
+    sock->write_raw("0\r\n\r\n", 5);
 }
 
 /**

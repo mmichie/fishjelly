@@ -30,7 +30,7 @@
 - [x] Add proper POST request body handling with Content-Length
 - [x] Add basic content negotiation (Accept headers)
 - [x] Implement PUT and DELETE methods
-- [ ] Implement chunked transfer encoding support
+- [x] Implement chunked transfer encoding support (request parsing and response encoding)
 - [ ] Add timeout handling for slow clients
 - [ ] Implement connection pooling for keep-alive
 
