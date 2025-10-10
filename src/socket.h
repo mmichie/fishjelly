@@ -21,6 +21,10 @@ class Socket {
     void server_bind(int server_port);
     FILE* socket_fp_{nullptr};
 
+    // Timeout values in seconds
+    int read_timeout_{30};  // Default 30 seconds for reads
+    int write_timeout_{30}; // Default 30 seconds for writes
+
   public:
     int accept_fd_{-1}, pid_;
 
@@ -35,6 +39,14 @@ class Socket {
     void handle_error(std::string_view message);
     void set_socket_options();
     void bind_socket(int server_port);
+
+    // Timeout configuration
+    void set_read_timeout(int seconds);
+    void set_write_timeout(int seconds);
+    void apply_timeouts(); // Apply timeouts to the accepted connection
+
+    // Check if last error was a timeout
+    bool is_timeout_error() const;
 
     void close_socket();
     void close_client(); // Close only the client connection

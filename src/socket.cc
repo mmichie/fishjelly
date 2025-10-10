@@ -59,6 +59,54 @@ void Socket::close_client() {
 }
 
 /**
+ * Set read timeout for socket operations
+ */
+void Socket::set_read_timeout(int seconds) { read_timeout_ = seconds; }
+
+/**
+ * Set write timeout for socket operations
+ */
+void Socket::set_write_timeout(int seconds) { write_timeout_ = seconds; }
+
+/**
+ * Apply configured timeouts to the accepted connection socket
+ */
+void Socket::apply_timeouts() {
+    if (accept_fd_ < 0) {
+        return;
+    }
+
+    // Set read timeout
+    if (read_timeout_ > 0) {
+        struct timeval tv;
+        tv.tv_sec = read_timeout_;
+        tv.tv_usec = 0;
+        if (setsockopt(accept_fd_, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
+            if (DEBUG) {
+                std::cerr << "Failed to set read timeout: " << strerror(errno) << std::endl;
+            }
+        }
+    }
+
+    // Set write timeout
+    if (write_timeout_ > 0) {
+        struct timeval tv;
+        tv.tv_sec = write_timeout_;
+        tv.tv_usec = 0;
+        if (setsockopt(accept_fd_, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) < 0) {
+            if (DEBUG) {
+                std::cerr << "Failed to set write timeout: " << strerror(errno) << std::endl;
+            }
+        }
+    }
+}
+
+/**
+ * Check if the last error was a timeout
+ */
+bool Socket::is_timeout_error() const { return (errno == EAGAIN || errno == EWOULDBLOCK); }
+
+/**
  * Accepts a client connection and updates the internal state of the socket.
  */
 void Socket::accept_client() {
@@ -87,6 +135,9 @@ void Socket::accept_client() {
     // Don't create FILE* stream to avoid buffering issues with keep-alive
     // We'll use raw socket operations for both reading and writing
     socket_fp_ = nullptr;
+
+    // Apply timeouts to the new connection
+    apply_timeouts();
 }
 
 /**

@@ -149,12 +149,16 @@ void Http::printConnectionType(bool keep_alive) {
 /**
  * Starts the web server, listening on server_port.
  */
-void Http::start(int server_port) {
+void Http::start(int server_port, int read_timeout, int write_timeout) {
     assert(server_port > 0 && server_port <= 65535);
 
     bool keep_alive = false;
     int pid;
     sock = std::make_unique<Socket>(server_port);
+
+    // Configure timeouts
+    sock->set_read_timeout(read_timeout);
+    sock->set_write_timeout(write_timeout);
 
     // Loop to handle clients
     while (1) {
@@ -584,9 +588,16 @@ void Http::processPostRequest(const std::map<std::string, std::string>& headerma
                               << ", Read: " << bytes_read << std::endl;
                 }
                 if (sock) {
-                    sendHeader(400, 0, "text/html", keep_alive);
-                    sock->write_line(
-                        "<html><body>400 Bad Request - Incomplete POST body</body></html>");
+                    // Check if the error was a timeout
+                    if (bytes_read < 0 && sock->is_timeout_error()) {
+                        sendHeader(408, 0, "text/html", false);
+                        sock->write_line("<html><body>408 Request Timeout - Client too "
+                                         "slow sending body</body></html>");
+                    } else {
+                        sendHeader(400, 0, "text/html", keep_alive);
+                        sock->write_line(
+                            "<html><body>400 Bad Request - Incomplete POST body</body></html>");
+                    }
                 }
                 return;
             }
@@ -742,7 +753,14 @@ void Http::processPutRequest(const std::map<std::string, std::string>& headermap
             std::vector<char> buffer(content_length);
             ssize_t bytes_read = sock->read_raw(buffer.data(), content_length);
             if (bytes_read < content_length) {
-                sendHeader(400, 0, "text/plain", keep_alive);
+                // Check if the error was a timeout
+                if (bytes_read < 0 && sock->is_timeout_error()) {
+                    sendHeader(408, 0, "text/plain", false);
+                    sock->write_line("408 Request Timeout - Client too slow sending body\n");
+                } else {
+                    sendHeader(400, 0, "text/plain", keep_alive);
+                    sock->write_line("400 Bad Request - Incomplete body\n");
+                }
                 return;
             }
             body = std::string(buffer.data(), content_length);
@@ -1651,6 +1669,9 @@ void Http::sendHeader(int code, int size, std::string_view file_type, bool keep_
         break;
     case 406:
         headerStream << "HTTP/1.1 406 Not Acceptable\r\n";
+        break;
+    case 408:
+        headerStream << "HTTP/1.1 408 Request Timeout\r\n";
         break;
     case 411:
         headerStream << "HTTP/1.1 411 Length Required\r\n";

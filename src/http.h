@@ -76,7 +76,7 @@ class Http {
                     bool keep_alive = false, const std::vector<std::string>& extra_headers = {});
     void sendOptionsHeader(bool keep_alive = false);
     std::string getHeader(bool use_timeout = false);
-    void start(int server_port);
+    void start(int server_port, int read_timeout = 30, int write_timeout = 30);
     bool parseHeader(std::string_view header);
     void setTestMode(int requests) { test_requests = requests; }
 

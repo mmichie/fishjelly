@@ -31,7 +31,7 @@
 - [x] Add basic content negotiation (Accept headers)
 - [x] Implement PUT and DELETE methods
 - [x] Implement chunked transfer encoding support (request parsing and response encoding)
-- [ ] Add timeout handling for slow clients
+- [x] Add timeout handling for slow clients
 - [ ] Implement connection pooling for keep-alive
 
 ## Phase 5: Advanced Features (Low Priority)

@@ -112,6 +112,8 @@ struct CommandLineArgs {
     bool daemon;
     int test_requests; // Exit after N requests (0 = run forever)
     bool use_asio;     // Use ASIO instead of fork model
+    int read_timeout;  // Read timeout in seconds
+    int write_timeout; // Write timeout in seconds
 };
 
 CommandLineArgs parseCommandLineOptions(int argc, char* argv[]) {
@@ -142,6 +144,18 @@ CommandLineArgs parseCommandLineOptions(int argc, char* argv[]) {
         .default_value(false)
         .implicit_value(true);
 
+    program.add_argument("--read-timeout")
+        .help("read timeout in seconds (0 = no timeout)")
+        .default_value(30)
+        .scan<'i', int>()
+        .metavar("SECONDS");
+
+    program.add_argument("--write-timeout")
+        .help("write timeout in seconds (0 = no timeout)")
+        .default_value(30)
+        .scan<'i', int>()
+        .metavar("SECONDS");
+
     try {
         program.parse_args(argc, argv);
     } catch (const std::runtime_error& err) {
@@ -155,7 +169,9 @@ CommandLineArgs parseCommandLineOptions(int argc, char* argv[]) {
     return {.port = program.get<int>("--port"),
             .daemon = program.get<bool>("--daemon"),
             .test_requests = program.get<int>("--test"),
-            .use_asio = program.get<bool>("--asio")};
+            .use_asio = program.get<bool>("--asio"),
+            .read_timeout = program.get<int>("--read-timeout"),
+            .write_timeout = program.get<int>("--write-timeout")};
 }
 
 /**
@@ -201,7 +217,7 @@ int main(int argc, char* argv[]) {
         // Use traditional fork-based server
         Http webserver;
         webserver.setTestMode(args.test_requests);
-        webserver.start(args.port);
+        webserver.start(args.port, args.read_timeout, args.write_timeout);
     }
 
     return 0;
