@@ -15,10 +15,13 @@ project('fishjelly', ['cpp', 'c'],
 inc = include_directories('third_party')
 
 # Find Boost dependencies
-boost_dep = dependency('boost', 
+boost_dep = dependency('boost',
   modules : ['system', 'coroutine'],
   required : true
 )
+
+# Find OpenSSL for authentication (MD5 hashing)
+openssl_dep = dependency('openssl', required : true)
 
 # Get git hash for embedding
 git = find_program('git', required : false)
@@ -60,7 +63,8 @@ if clang_tidy.found()
     'src/logging_middleware.cc',
     'src/security_middleware.cc',
     'src/compression_middleware.cc',
-    'src/content_negotiator.cc'
+    'src/content_negotiator.cc',
+    'src/auth.cc'
   )
   
   # Add clang-tidy target

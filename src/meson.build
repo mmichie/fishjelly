@@ -32,13 +32,15 @@ lib_sources = files(
   'compression_middleware.h',
   'compression_middleware.cc',
   'content_negotiator.h',
-  'content_negotiator.cc'
+  'content_negotiator.cc',
+  'auth.h',
+  'auth.cc'
 )
 
 # Create static library for testing
 fishjelly_lib = static_library('fishjelly',
   lib_sources,
-  dependencies : boost_dep,
+  dependencies : [boost_dep, openssl_dep],
   cpp_args : [
     '-DGIT_HASH="' + git_hash + '"',
     '-fstack-protector-strong',
@@ -58,7 +60,7 @@ executable('shelob',
   'webserver.cc',
   'webserver.h',
   link_with : fishjelly_lib,
-  dependencies : boost_dep,
+  dependencies : [boost_dep, openssl_dep],
   include_directories : inc,
   cpp_args : [
     '-DGIT_HASH="' + git_hash + '"',
@@ -78,7 +80,7 @@ install_man('fishjelly.1')
 executable('middleware_demo',
   'middleware_demo.cc',
   link_with : fishjelly_lib,
-  dependencies : boost_dep,
+  dependencies : [boost_dep, openssl_dep],
   include_directories : inc,
   cpp_args : [
     '-DGIT_HASH="' + git_hash + '"',
