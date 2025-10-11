@@ -149,62 +149,95 @@ void Http::printConnectionType(bool keep_alive) {
 /**
  * Starts the web server, listening on server_port.
  */
-void Http::start(int server_port, int read_timeout, int write_timeout) {
+void Http::start(int server_port, int read_timeout, int write_timeout, int num_workers) {
     assert(server_port > 0 && server_port <= 65535);
 
-    bool keep_alive = false;
-    int pid;
     sock = std::make_unique<Socket>(server_port);
 
     // Configure timeouts
     sock->set_read_timeout(read_timeout);
     sock->set_write_timeout(write_timeout);
 
-    // Loop to handle clients
-    while (1) {
-        sock->accept_client();
-
-        pid = fork();
-        if (pid < 0) {
-            perror("Fork");
-            exit(1);
+    // Use worker pool if num_workers > 0, otherwise use traditional fork model
+    if (num_workers > 0) {
+        // Pre-fork worker pool model
+        if (DEBUG) {
+            std::cout << "Starting worker pool with " << num_workers << " workers" << std::endl;
         }
 
-        /* Child */
-        if (pid == 0) {
-            // First request doesn't use timeout
-            keep_alive = parseHeader(getHeader(false));
-            while (keep_alive) {
-                // Subsequent requests use timeout for keep-alive
-                std::string header = getHeader(true);
-                if (header.empty()) {
-                    // Timeout or connection closed
+        // Create worker processes
+        for (int i = 0; i < num_workers; i++) {
+            pid_t pid = fork();
+            if (pid < 0) {
+                perror("Fork worker");
+                cleanup_workers();
+                exit(1);
+            } else if (pid == 0) {
+                // Worker process
+                worker_loop();
+                exit(0);
+            } else {
+                // Parent: track worker PID
+                worker_pids_.push_back(pid);
+                if (DEBUG) {
+                    std::cout << "Created worker " << i << " with PID " << pid << std::endl;
+                }
+            }
+        }
+
+        // Parent monitors and manages workers
+        monitor_workers();
+    } else {
+        // Traditional fork-per-connection model
+        bool keep_alive = false;
+        int pid;
+
+        // Loop to handle clients
+        while (1) {
+            sock->accept_client();
+
+            pid = fork();
+            if (pid < 0) {
+                perror("Fork");
+                exit(1);
+            }
+
+            /* Child */
+            if (pid == 0) {
+                // First request doesn't use timeout
+                keep_alive = parseHeader(getHeader(false));
+                while (keep_alive) {
+                    // Subsequent requests use timeout for keep-alive
+                    std::string header = getHeader(true);
+                    if (header.empty()) {
+                        // Timeout or connection closed
+                        break;
+                    }
+                    keep_alive = parseHeader(header);
+                }
+
+                sock->close_socket();
+                exit(0);
+            }
+
+            /* Parent */
+            else {
+                sock->close_client(); // Only close client connection, not server socket
+                request_count++;
+
+                // Exit after N requests in test mode
+                if (test_requests > 0 && request_count >= test_requests) {
+                    std::cout << "Test mode: Exiting after " << request_count << " requests"
+                              << std::endl;
                     break;
                 }
-                keep_alive = parseHeader(header);
-            }
-
-            sock->close_socket();
-            exit(0);
-        }
-
-        /* Parent */
-        else {
-            sock->close_client(); // Only close client connection, not server socket
-            request_count++;
-
-            // Exit after N requests in test mode
-            if (test_requests > 0 && request_count >= test_requests) {
-                std::cout << "Test mode: Exiting after " << request_count << " requests"
-                          << std::endl;
-                break;
             }
         }
-    }
 
-    // Print completion message for test mode
-    if (test_requests > 0) {
-        std::cout << "Server shutdown complete." << std::endl;
+        // Print completion message for test mode
+        if (test_requests > 0) {
+            std::cout << "Server shutdown complete." << std::endl;
+        }
     }
 }
 
@@ -1760,4 +1793,94 @@ void Http::sendOptionsHeader(bool keep_alive) {
     if (sock) {
         sock->write_line(lastHeader);
     }
+}
+
+/**
+ * Worker loop - handles connections in worker process
+ */
+void Http::worker_loop() {
+    int requests_handled = 0;
+    bool keep_alive = false;
+
+    if (DEBUG) {
+        std::cout << "Worker " << getpid() << " started" << std::endl;
+    }
+
+    while (requests_handled < max_requests_per_worker_) {
+        // Accept connection (workers compete for this - kernel handles locking)
+        sock->accept_client();
+
+        if (DEBUG) {
+            std::cout << "Worker " << getpid() << " accepted connection" << std::endl;
+        }
+
+        // Handle keep-alive loop
+        keep_alive = parseHeader(getHeader(false));
+        requests_handled++;
+
+        while (keep_alive && requests_handled < max_requests_per_worker_) {
+            std::string header = getHeader(true);
+            if (header.empty()) {
+                break;
+            }
+            keep_alive = parseHeader(header);
+            requests_handled++;
+        }
+
+        sock->close_client();
+    }
+
+    if (DEBUG) {
+        std::cout << "Worker " << getpid() << " exiting after " << requests_handled << " requests"
+                  << std::endl;
+    }
+}
+
+/**
+ * Monitor and manage worker processes
+ */
+void Http::monitor_workers() {
+    while (true) {
+        int status;
+        pid_t pid = wait(&status);
+
+        if (pid > 0) {
+            if (DEBUG) {
+                std::cout << "Worker " << pid << " exited with status " << status << std::endl;
+            }
+
+            // Spawn replacement worker
+            pid_t new_pid = fork();
+            if (new_pid < 0) {
+                perror("Fork replacement worker");
+                continue;
+            } else if (new_pid == 0) {
+                // New worker process
+                worker_loop();
+                exit(0);
+            } else {
+                // Parent: replace PID in tracking vector
+                for (auto& wpid : worker_pids_) {
+                    if (wpid == pid) {
+                        wpid = new_pid;
+                        if (DEBUG) {
+                            std::cout << "Replaced worker " << pid << " with " << new_pid
+                                      << std::endl;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Cleanup all worker processes
+ */
+void Http::cleanup_workers() {
+    for (pid_t pid : worker_pids_) {
+        kill(pid, SIGTERM);
+    }
+    worker_pids_.clear();
 }

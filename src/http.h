@@ -60,6 +60,13 @@ class Http {
     int test_requests = 0;  // Exit after N requests (0 = run forever)
     int request_count = 0;  // Current request count
 
+    // Worker pool management
+    std::vector<pid_t> worker_pids_;
+    int max_requests_per_worker_ = 1000; // Worker restarts after this many requests
+    void worker_loop();
+    void monitor_workers();
+    void cleanup_workers();
+
     // Middleware chain
     std::unique_ptr<MiddlewareChain> middleware_chain;
 
@@ -76,9 +83,10 @@ class Http {
                     bool keep_alive = false, const std::vector<std::string>& extra_headers = {});
     void sendOptionsHeader(bool keep_alive = false);
     std::string getHeader(bool use_timeout = false);
-    void start(int server_port, int read_timeout = 30, int write_timeout = 30);
+    void start(int server_port, int read_timeout = 30, int write_timeout = 30, int num_workers = 0);
     bool parseHeader(std::string_view header);
     void setTestMode(int requests) { test_requests = requests; }
+    void setMaxRequestsPerWorker(int max_requests) { max_requests_per_worker_ = max_requests; }
 
     // Middleware configuration
     void setMiddlewareChain(std::unique_ptr<MiddlewareChain> chain) {

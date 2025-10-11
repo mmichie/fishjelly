@@ -110,10 +110,12 @@ void controlBreak(int sigNo) {
 struct CommandLineArgs {
     int port;
     bool daemon;
-    int test_requests; // Exit after N requests (0 = run forever)
-    bool use_asio;     // Use ASIO instead of fork model
-    int read_timeout;  // Read timeout in seconds
-    int write_timeout; // Write timeout in seconds
+    int test_requests;           // Exit after N requests (0 = run forever)
+    bool use_asio;               // Use ASIO instead of fork model
+    int read_timeout;            // Read timeout in seconds
+    int write_timeout;           // Write timeout in seconds
+    int workers;                 // Number of worker processes (0 = traditional fork model)
+    int max_requests_per_worker; // Max requests per worker before restart
 };
 
 CommandLineArgs parseCommandLineOptions(int argc, char* argv[]) {
@@ -156,6 +158,18 @@ CommandLineArgs parseCommandLineOptions(int argc, char* argv[]) {
         .scan<'i', int>()
         .metavar("SECONDS");
 
+    program.add_argument("--workers")
+        .help("number of worker processes for connection pooling (0 = traditional fork model)")
+        .default_value(0)
+        .scan<'i', int>()
+        .metavar("N");
+
+    program.add_argument("--max-requests-per-worker")
+        .help("maximum requests per worker before restart (prevents memory leaks)")
+        .default_value(1000)
+        .scan<'i', int>()
+        .metavar("N");
+
     try {
         program.parse_args(argc, argv);
     } catch (const std::runtime_error& err) {
@@ -171,7 +185,9 @@ CommandLineArgs parseCommandLineOptions(int argc, char* argv[]) {
             .test_requests = program.get<int>("--test"),
             .use_asio = program.get<bool>("--asio"),
             .read_timeout = program.get<int>("--read-timeout"),
-            .write_timeout = program.get<int>("--write-timeout")};
+            .write_timeout = program.get<int>("--write-timeout"),
+            .workers = program.get<int>("--workers"),
+            .max_requests_per_worker = program.get<int>("--max-requests-per-worker")};
 }
 
 /**
@@ -217,7 +233,8 @@ int main(int argc, char* argv[]) {
         // Use traditional fork-based server
         Http webserver;
         webserver.setTestMode(args.test_requests);
-        webserver.start(args.port, args.read_timeout, args.write_timeout);
+        webserver.setMaxRequestsPerWorker(args.max_requests_per_worker);
+        webserver.start(args.port, args.read_timeout, args.write_timeout, args.workers);
     }
 
     return 0;
