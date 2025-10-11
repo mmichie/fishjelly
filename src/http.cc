@@ -1354,6 +1354,82 @@ void Http::processHeadRequest(const std::map<std::string, std::string>& headerma
     file.seekg(0, std::ios::end);
     auto size = file.tellg();
 
+    // Get MIME type
+    Mime mime;
+    mime.readMimeConfig("mime.types");
+    std::string content_type = mime.getMimeFromExtension(filename);
+
+    // Check for Range header
+    auto range_it = headermap.find("Range");
+    if (range_it != headermap.end()) {
+        // If-Range support
+        bool honor_range = true;
+        auto if_range_it = headermap.find("If-Range");
+        if (if_range_it != headermap.end()) {
+            if (if_range_it->second.find("GMT") != std::string::npos) {
+                time_t if_range_time = parseHttpDate(if_range_it->second);
+                struct stat file_stat;
+                if (stat(filename.c_str(), &file_stat) == 0) {
+                    if (file_stat.st_mtime > if_range_time) {
+                        honor_range = false;
+                    }
+                }
+            } else {
+                honor_range = false;
+            }
+        }
+
+        if (honor_range) {
+            std::vector<ByteRange> ranges = parseRangeHeader(range_it->second);
+            if (ranges.size() == 1) {
+                // For HEAD, we only handle single range requests
+                long long start, end;
+                if (validateRange(ranges[0], size, start, end)) {
+                    long long content_length = end - start + 1;
+
+                    // Log the range request
+                    Log& log = Log::getInstance();
+                    log.openLogFile("logs/access_log");
+                    auto referer_it = headermap.find("Referer");
+                    auto user_agent_it = headermap.find("User-Agent");
+                    log.writeLogLine(inet_ntoa(sock->client.sin_addr), "HEAD " + filename, 206,
+                                     content_length,
+                                     referer_it != headermap.end() ? referer_it->second : "",
+                                     user_agent_it != headermap.end() ? user_agent_it->second : "");
+
+                    // Send 206 header with Content-Range
+                    std::ostringstream headerStream;
+                    headerStream << "HTTP/1.1 206 Partial Content\r\n";
+
+                    std::array<char, 50> buf;
+                    time_t ltime = time(nullptr);
+                    struct tm* today = gmtime(&ltime);
+                    strftime(buf.data(), buf.size(), "%a, %d %b %Y %H:%M:%S GMT", today);
+                    headerStream << "Date: " << buf.data() << "\r\n";
+
+                    headerStream << "Server: SHELOB/0.5 (Unix)\r\n";
+                    headerStream << "Content-Type: " << content_type << "\r\n";
+                    headerStream << "Content-Range: bytes " << start << "-" << end << "/" << size
+                                 << "\r\n";
+                    headerStream << "Content-Length: " << content_length << "\r\n";
+                    headerStream << "Accept-Ranges: bytes\r\n";
+                    headerStream << "Connection: " << (keep_alive ? "keep-alive" : "close")
+                                 << "\r\n";
+                    headerStream << "\r\n";
+
+                    if (sock) {
+                        sock->write_line(headerStream.str());
+                    }
+                    return;
+                }
+            } else if (ranges.size() > 1) {
+                // Multiple ranges - would need multipart, just return 200 for HEAD
+                // (Most clients don't use multiple ranges with HEAD anyway)
+            }
+        }
+    }
+
+    // No Range header or single range failed - send normal response
     // Log using singleton
     Log& log = Log::getInstance();
     log.openLogFile("logs/access_log");
@@ -1363,12 +1439,8 @@ void Http::processHeadRequest(const std::map<std::string, std::string>& headerma
                      referer_it != headermap.end() ? referer_it->second : "",
                      user_agent_it != headermap.end() ? user_agent_it->second : "");
 
-    // TODO: Optimize Mime to be a singleton
-    Mime mime;
-    mime.readMimeConfig("mime.types");
-
     // Send header
-    sendHeader(200, size, mime.getMimeFromExtension(filename), keep_alive);
+    sendHeader(200, size, content_type, keep_alive);
 }
 
 void Http::processGetRequest(const std::map<std::string, std::string>& headermap,
@@ -1587,6 +1659,7 @@ void Http::processGetRequest(const std::map<std::string, std::string>& headermap
     // Determine File Size
     file.seekg(0, std::ios::end);
     auto size = file.tellg();
+    file.seekg(0, std::ios::beg);
 
     if (file_extension == ".sh") {
         Cgi cgi;
@@ -1595,6 +1668,58 @@ void Http::processGetRequest(const std::map<std::string, std::string>& headermap
         return;
     }
 
+    // Get MIME type
+    Mime mime;
+    mime.readMimeConfig("mime.types");
+    std::string content_type = mime.getMimeFromExtension(filename);
+
+    // Check for Range header
+    auto range_it = headermap.find("Range");
+    if (range_it != headermap.end()) {
+        // If-Range support: only honor Range if If-Range conditions match
+        bool honor_range = true;
+        auto if_range_it = headermap.find("If-Range");
+        if (if_range_it != headermap.end()) {
+            // If-Range can be either an ETag or a date
+            // For simplicity, we'll check if it's a date (contains spaces/GMT)
+            if (if_range_it->second.find("GMT") != std::string::npos) {
+                // It's a date - check if file was modified
+                time_t if_range_time = parseHttpDate(if_range_it->second);
+                struct stat file_stat;
+                if (stat(filename.c_str(), &file_stat) == 0) {
+                    if (file_stat.st_mtime > if_range_time) {
+                        honor_range = false; // File modified, return full content
+                    }
+                }
+            }
+            // For ETags, we'd need to implement ETag generation and comparison
+            // For now, we'll assume ETag matching fails and return full content
+            else {
+                honor_range = false;
+            }
+        }
+
+        if (honor_range) {
+            // Parse and handle Range request
+            std::vector<ByteRange> ranges = parseRangeHeader(range_it->second);
+            if (!ranges.empty()) {
+                // Log the range request
+                Log& log = Log::getInstance();
+                log.openLogFile("logs/access_log");
+                auto referer_it = headermap.find("Referer");
+                auto user_agent_it = headermap.find("User-Agent");
+                log.writeLogLine(inet_ntoa(sock->client.sin_addr), std::string(request_line), 206,
+                                 0, referer_it != headermap.end() ? referer_it->second : "",
+                                 user_agent_it != headermap.end() ? user_agent_it->second : "");
+
+                // Send partial content
+                sendPartialContent(filename, ranges, size, content_type, keep_alive);
+                return;
+            }
+        }
+    }
+
+    // No Range header or If-Range failed - send full file
     // Log using singleton
     Log& log = Log::getInstance();
     log.openLogFile("logs/access_log");
@@ -1604,14 +1729,10 @@ void Http::processGetRequest(const std::map<std::string, std::string>& headermap
                      referer_it != headermap.end() ? referer_it->second : "",
                      user_agent_it != headermap.end() ? user_agent_it->second : "");
 
-    // TODO: optimize Mime to be a singleton
-    Mime mime;
-    mime.readMimeConfig("mime.types");
-
     /* BUG: There is a possible bug where the file size changes between sending
        the header and when the file is actually sent through the socket.
     */
-    sendHeader(200, size, mime.getMimeFromExtension(filename), keep_alive, extra_headers);
+    sendHeader(200, size, content_type, keep_alive, extra_headers);
 
     // Use middleware if available, otherwise use legacy sendFile
     if (middleware_chain) {
@@ -1694,8 +1815,14 @@ void Http::sendHeader(int code, int size, std::string_view file_type, bool keep_
     case 304:
         headerStream << "HTTP/1.1 304 Not Modified\r\n";
         break;
+    case 206:
+        headerStream << "HTTP/1.1 206 Partial Content\r\n";
+        break;
     case 400:
         headerStream << "HTTP/1.1 400 Bad Request\r\n";
+        break;
+    case 416:
+        headerStream << "HTTP/1.1 416 Range Not Satisfiable\r\n";
         break;
     case 404:
         headerStream << "HTTP/1.1 404 Not Found\r\n";
@@ -1737,6 +1864,11 @@ void Http::sendHeader(int code, int size, std::string_view file_type, bool keep_
 
     headerStream << "Connection: " << (keep_alive ? "keep-alive" : "close") << "\r\n";
     headerStream << "Content-Type: " << file_type << "\r\n";
+
+    // Add Accept-Ranges header for 200 OK responses
+    if (code == 200) {
+        headerStream << "Accept-Ranges: bytes\r\n";
+    }
 
     // Add Set-Cookie headers
     for (const auto& cookie : response_cookies) {
@@ -1792,6 +1924,296 @@ void Http::sendOptionsHeader(bool keep_alive) {
 
     if (sock) {
         sock->write_line(lastHeader);
+    }
+}
+
+/**
+ * Format time_t as HTTP date string
+ */
+std::string Http::formatHttpDate(time_t time) {
+    std::array<char, 50> buf;
+    struct tm* gmt = gmtime(&time);
+    strftime(buf.data(), buf.size(), "%a, %d %b %Y %H:%M:%S GMT", gmt);
+    return std::string(buf.data());
+}
+
+/**
+ * Parse Range header and return vector of ranges
+ * Supports formats like:
+ * - bytes=0-499 (single range)
+ * - bytes=0-499,1000-1499 (multiple ranges)
+ * - bytes=0- (from start to end)
+ * - bytes=-500 (last 500 bytes - suffix range)
+ * - bytes=500- (from 500 to end)
+ */
+std::vector<ByteRange> Http::parseRangeHeader(const std::string& range_header) {
+    std::vector<ByteRange> ranges;
+
+    // Check if header starts with "bytes="
+    if (range_header.find("bytes=") != 0) {
+        return ranges; // Invalid format
+    }
+
+    std::string ranges_str = range_header.substr(6); // Skip "bytes="
+
+    // Split by comma to handle multiple ranges
+    size_t pos = 0;
+    while (pos < ranges_str.length()) {
+        size_t comma_pos = ranges_str.find(',', pos);
+        std::string range_spec = ranges_str.substr(pos, comma_pos - pos);
+
+        // Trim whitespace
+        range_spec.erase(0, range_spec.find_first_not_of(" \t"));
+        range_spec.erase(range_spec.find_last_not_of(" \t\r\n") + 1);
+
+        ByteRange range;
+        range.start = -1;
+        range.end = -1;
+        range.is_suffix = false;
+
+        size_t dash_pos = range_spec.find('-');
+        if (dash_pos == std::string::npos) {
+            // Invalid range format
+            pos = (comma_pos == std::string::npos) ? ranges_str.length() : comma_pos + 1;
+            continue;
+        }
+
+        std::string start_str = range_spec.substr(0, dash_pos);
+        std::string end_str = range_spec.substr(dash_pos + 1);
+
+        // Trim
+        start_str.erase(0, start_str.find_first_not_of(" \t"));
+        start_str.erase(start_str.find_last_not_of(" \t") + 1);
+        end_str.erase(0, end_str.find_first_not_of(" \t"));
+        end_str.erase(end_str.find_last_not_of(" \t") + 1);
+
+        try {
+            if (start_str.empty() && !end_str.empty()) {
+                // Suffix range: -500 means last 500 bytes
+                range.is_suffix = true;
+                range.end = std::stoll(end_str);
+            } else if (!start_str.empty()) {
+                range.start = std::stoll(start_str);
+                if (!end_str.empty()) {
+                    range.end = std::stoll(end_str);
+                }
+                // else: start- format (end stays -1)
+            }
+
+            ranges.push_back(range);
+        } catch (...) {
+            // Invalid number format, skip this range
+        }
+
+        pos = (comma_pos == std::string::npos) ? ranges_str.length() : comma_pos + 1;
+    }
+
+    return ranges;
+}
+
+/**
+ * Validate a range against file size and compute actual byte positions
+ * Returns true if range is valid, false otherwise
+ * Outputs actual start and end positions (inclusive)
+ */
+bool Http::validateRange(const ByteRange& range, long long file_size, long long& start,
+                         long long& end) {
+    if (range.is_suffix) {
+        // Suffix range: -500 means last 500 bytes
+        if (range.end <= 0) {
+            return false;
+        }
+        start = std::max(0LL, file_size - range.end);
+        end = file_size - 1;
+        return true;
+    }
+
+    // Normal range
+    if (range.start < 0) {
+        return false; // Invalid
+    }
+
+    start = range.start;
+
+    // If start is beyond file size, range is invalid
+    if (start >= file_size) {
+        return false;
+    }
+
+    // Compute end
+    if (range.end < 0) {
+        // Open-ended range: start-
+        end = file_size - 1;
+    } else {
+        end = std::min(range.end, file_size - 1);
+    }
+
+    // End must be >= start
+    if (end < start) {
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * Send partial content response (206)
+ * Handles both single and multiple ranges
+ */
+void Http::sendPartialContent(std::string_view filename, const std::vector<ByteRange>& ranges,
+                              long long file_size, std::string_view content_type, bool keep_alive) {
+    // Validate all ranges first
+    std::vector<std::pair<long long, long long>> valid_ranges;
+    for (const auto& range : ranges) {
+        long long start, end;
+        if (validateRange(range, file_size, start, end)) {
+            valid_ranges.push_back({start, end});
+        }
+    }
+
+    if (valid_ranges.empty()) {
+        // All ranges are invalid - send 416
+        std::ostringstream headerStream;
+        headerStream << "HTTP/1.1 416 Range Not Satisfiable\r\n";
+
+        std::array<char, 50> buf;
+        time_t ltime = time(nullptr);
+        struct tm* today = gmtime(&ltime);
+        strftime(buf.data(), buf.size(), "%a, %d %b %Y %H:%M:%S GMT", today);
+        headerStream << "Date: " << buf.data() << "\r\n";
+
+        headerStream << "Server: SHELOB/0.5 (Unix)\r\n";
+        headerStream << "Content-Range: bytes */" << file_size << "\r\n";
+        headerStream << "Content-Length: 0\r\n";
+        headerStream << "Connection: " << (keep_alive ? "keep-alive" : "close") << "\r\n";
+        headerStream << "\r\n";
+
+        if (sock) {
+            sock->write_line(headerStream.str());
+        }
+        return;
+    }
+
+    if (valid_ranges.size() == 1) {
+        // Single range - send simple 206 response
+        long long start = valid_ranges[0].first;
+        long long end = valid_ranges[0].second;
+        long long content_length = end - start + 1;
+
+        std::ostringstream headerStream;
+        headerStream << "HTTP/1.1 206 Partial Content\r\n";
+
+        std::array<char, 50> buf;
+        time_t ltime = time(nullptr);
+        struct tm* today = gmtime(&ltime);
+        strftime(buf.data(), buf.size(), "%a, %d %b %Y %H:%M:%S GMT", today);
+        headerStream << "Date: " << buf.data() << "\r\n";
+
+        headerStream << "Server: SHELOB/0.5 (Unix)\r\n";
+        headerStream << "Content-Type: " << content_type << "\r\n";
+        headerStream << "Content-Range: bytes " << start << "-" << end << "/" << file_size
+                     << "\r\n";
+        headerStream << "Content-Length: " << content_length << "\r\n";
+        headerStream << "Accept-Ranges: bytes\r\n";
+        headerStream << "Connection: " << (keep_alive ? "keep-alive" : "close") << "\r\n";
+        headerStream << "\r\n";
+
+        if (sock) {
+            sock->write_line(headerStream.str());
+
+            // Send the requested byte range
+            std::ifstream file(filename.data(), std::ios::in | std::ios::binary);
+            if (file) {
+                file.seekg(start);
+                std::vector<char> buffer(content_length);
+                if (file.read(buffer.data(), content_length)) {
+                    sock->write_raw(buffer.data(), content_length);
+                }
+            }
+        }
+    } else {
+        // Multiple ranges - use multipart/byteranges
+        sendMultipartRanges(filename, ranges, file_size, content_type, keep_alive);
+    }
+}
+
+/**
+ * Send multipart/byteranges response for multiple ranges
+ */
+void Http::sendMultipartRanges(std::string_view filename, const std::vector<ByteRange>& ranges,
+                               long long file_size, std::string_view content_type,
+                               bool keep_alive) {
+    // Generate boundary
+    std::string boundary = "SHELOB_MULTIPART_BOUNDARY";
+
+    // Validate all ranges and prepare data
+    std::vector<std::pair<long long, long long>> valid_ranges;
+    for (const auto& range : ranges) {
+        long long start, end;
+        if (validateRange(range, file_size, start, end)) {
+            valid_ranges.push_back({start, end});
+        }
+    }
+
+    if (valid_ranges.empty()) {
+        // All ranges invalid - send 416
+        sendPartialContent(filename, ranges, file_size, content_type, keep_alive);
+        return;
+    }
+
+    // Build the multipart body
+    std::ostringstream body;
+    std::ifstream file(filename.data(), std::ios::in | std::ios::binary);
+    if (!file) {
+        sendHeader(404, 0, "text/html", keep_alive);
+        if (sock) {
+            sock->write_line("<html><body>404 Not Found</body></html>");
+        }
+        return;
+    }
+
+    for (const auto& [start, end] : valid_ranges) {
+        long long content_length = end - start + 1;
+
+        // Boundary
+        body << "\r\n--" << boundary << "\r\n";
+        body << "Content-Type: " << content_type << "\r\n";
+        body << "Content-Range: bytes " << start << "-" << end << "/" << file_size << "\r\n";
+        body << "\r\n";
+
+        // Read and append data
+        file.seekg(start);
+        std::vector<char> buffer(content_length);
+        if (file.read(buffer.data(), content_length)) {
+            body.write(buffer.data(), content_length);
+        }
+    }
+
+    // Final boundary
+    body << "\r\n--" << boundary << "--\r\n";
+
+    std::string body_str = body.str();
+
+    // Send headers
+    std::ostringstream headerStream;
+    headerStream << "HTTP/1.1 206 Partial Content\r\n";
+
+    std::array<char, 50> buf;
+    time_t ltime = time(nullptr);
+    struct tm* today = gmtime(&ltime);
+    strftime(buf.data(), buf.size(), "%a, %d %b %Y %H:%M:%S GMT", today);
+    headerStream << "Date: " << buf.data() << "\r\n";
+
+    headerStream << "Server: SHELOB/0.5 (Unix)\r\n";
+    headerStream << "Content-Type: multipart/byteranges; boundary=" << boundary << "\r\n";
+    headerStream << "Content-Length: " << body_str.length() << "\r\n";
+    headerStream << "Accept-Ranges: bytes\r\n";
+    headerStream << "Connection: " << (keep_alive ? "keep-alive" : "close") << "\r\n";
+    headerStream << "\r\n";
+
+    if (sock) {
+        sock->write_line(headerStream.str());
+        sock->write_raw(body_str.data(), body_str.length());
     }
 }
 

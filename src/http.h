@@ -20,6 +20,13 @@
 #include "socket.h"
 #include "token.h"
 
+// Structure to represent a byte range
+struct ByteRange {
+    long long start; // -1 means unspecified
+    long long end;   // -1 means unspecified
+    bool is_suffix;  // true for suffix ranges like -500 (last 500 bytes)
+};
+
 class Http {
   private:
     void printDate();
@@ -55,6 +62,16 @@ class Http {
                                bool keep_alive);
     time_t parseHttpDate(const std::string& date_str);
     bool isModifiedSince(const std::string& filename, time_t since_time);
+
+    // Range request support
+    std::vector<ByteRange> parseRangeHeader(const std::string& range_header);
+    bool validateRange(const ByteRange& range, long long file_size, long long& start,
+                       long long& end);
+    void sendPartialContent(std::string_view filename, const std::vector<ByteRange>& ranges,
+                            long long file_size, std::string_view content_type, bool keep_alive);
+    void sendMultipartRanges(std::string_view filename, const std::vector<ByteRange>& ranges,
+                             long long file_size, std::string_view content_type, bool keep_alive);
+    std::string formatHttpDate(time_t time);
 
     std::string lastHeader; // Store last sent header for testing
     int test_requests = 0;  // Exit after N requests (0 = run forever)
