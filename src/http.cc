@@ -20,6 +20,18 @@
 Http::Http() {
     // Don't initialize middleware by default to maintain compatibility
     // Middleware can be set up explicitly with setupDefaultMiddleware()
+
+    // Configure authentication users (hardcoded for demo)
+    // NOTE: load_users_from_file() has a string parsing bug that causes
+    // std::out_of_range exceptions. Needs debugging before it can be used.
+    // TODO: Fix string trimming in Auth::load_users_from_file()
+    auth.add_user("admin", "secret123");
+    auth.add_user("testuser", "password");
+    auth.add_user("demo", "demo");
+
+    // Configure protected paths
+    auth.add_protected_path("/secure", "Secure Area");
+    auth.add_protected_path("/admin", "Admin Area");
 }
 
 /**
@@ -1449,6 +1461,11 @@ void Http::processGetRequest(const std::map<std::string, std::string>& headermap
     if (it == headermap.end())
         return;
 
+    // Check authentication first
+    if (!checkAuthentication(it->second, "GET", headermap, keep_alive)) {
+        return; // Authentication failed, 401 already sent
+    }
+
     // Handle cookie demo
     if (it->second == "/cookie-demo") {
         // Parse cookies from request
@@ -1821,6 +1838,9 @@ void Http::sendHeader(int code, int size, std::string_view file_type, bool keep_
     case 400:
         headerStream << "HTTP/1.1 400 Bad Request\r\n";
         break;
+    case 401:
+        headerStream << "HTTP/1.1 401 Unauthorized\r\n";
+        break;
     case 416:
         headerStream << "HTTP/1.1 416 Range Not Satisfiable\r\n";
         break;
@@ -1935,6 +1955,69 @@ std::string Http::formatHttpDate(time_t time) {
     struct tm* gmt = gmtime(&time);
     strftime(buf.data(), buf.size(), "%a, %d %b %Y %H:%M:%S GMT", gmt);
     return std::string(buf.data());
+}
+
+/**
+ * Check authentication for a path
+ * Returns true if authentication passed or path is not protected
+ * Returns false and sends 401 response if authentication failed
+ */
+bool Http::checkAuthentication(const std::string& path, const std::string& method,
+                               const std::map<std::string, std::string>& headermap,
+                               bool keep_alive) {
+    // Check if this path is protected
+    std::string realm;
+    if (!auth.is_protected(path, realm)) {
+        return true; // Not protected, allow access
+    }
+
+    // Path is protected - check for Authorization header
+    auto auth_header_it = headermap.find("Authorization");
+    if (auth_header_it == headermap.end()) {
+        // No auth header - send 401 challenge
+        std::string challenge = auth.generate_basic_challenge(realm);
+
+        std::vector<std::string> extra_headers;
+        extra_headers.push_back("WWW-Authenticate: " + challenge);
+
+        sendHeader(401, 0, "text/html", keep_alive, extra_headers);
+        if (sock) {
+            sock->write_line("<html><body><h1>401 Unauthorized</h1>"
+                             "<p>This resource requires authentication.</p></body></html>");
+        }
+        return false;
+    }
+
+    // We have an auth header - validate it
+    const std::string& auth_header = auth_header_it->second;
+
+    bool authenticated = false;
+
+    // Try Basic auth first
+    if (auth_header.find("Basic ") == 0) {
+        authenticated = auth.validate_basic_auth(auth_header);
+    }
+    // Try Digest auth
+    else if (auth_header.find("Digest ") == 0) {
+        authenticated = auth.validate_digest_auth(auth_header, method, path);
+    }
+
+    if (!authenticated) {
+        // Authentication failed - send 401
+        std::string challenge = auth.generate_basic_challenge(realm);
+
+        std::vector<std::string> extra_headers;
+        extra_headers.push_back("WWW-Authenticate: " + challenge);
+
+        sendHeader(401, 0, "text/html", keep_alive, extra_headers);
+        if (sock) {
+            sock->write_line("<html><body><h1>401 Unauthorized</h1>"
+                             "<p>Invalid credentials.</p></body></html>");
+        }
+        return false;
+    }
+
+    return true; // Authentication passed
 }
 
 /**

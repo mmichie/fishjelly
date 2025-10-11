@@ -11,6 +11,7 @@
 
 #include "global.h"
 
+#include "auth.h"
 #include "cgi.h"
 #include "content_negotiator.h"
 #include "filter.h"
@@ -73,6 +74,10 @@ class Http {
                              long long file_size, std::string_view content_type, bool keep_alive);
     std::string formatHttpDate(time_t time);
 
+    // Authentication support
+    bool checkAuthentication(const std::string& path, const std::string& method,
+                             const std::map<std::string, std::string>& headermap, bool keep_alive);
+
     std::string lastHeader; // Store last sent header for testing
     int test_requests = 0;  // Exit after N requests (0 = run forever)
     int request_count = 0;  // Current request count
@@ -92,6 +97,9 @@ class Http {
 
     // Content negotiation
     ContentNegotiator content_negotiator;
+
+    // Authentication
+    Auth auth;
 
   public:
     Http(); // Constructor to initialize middleware

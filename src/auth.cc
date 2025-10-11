@@ -3,6 +3,7 @@
 #include <cctype>
 #include <fstream>
 #include <iomanip>
+#include <iostream>
 #include <openssl/md5.h>
 #include <random>
 #include <sstream>
@@ -157,13 +158,17 @@ void Auth::cleanup_expired_nonces() {
 std::map<std::string, std::string> Auth::parse_basic_auth(const std::string& auth_header) {
     std::map<std::string, std::string> result;
 
-    // Check if it starts with "Basic "
-    if (auth_header.find("Basic ") != 0) {
+    // Check if it starts with "Basic " and has content after
+    if (auth_header.length() <= 6 || auth_header.find("Basic ") != 0) {
         return result;
     }
 
     // Extract and decode the base64 part
     std::string encoded = auth_header.substr(6);
+    if (encoded.empty()) {
+        return result;
+    }
+
     std::string decoded = base64_decode(encoded);
 
     // Split username:password
@@ -185,12 +190,15 @@ std::map<std::string, std::string> Auth::parse_basic_auth(const std::string& aut
 std::map<std::string, std::string> Auth::parse_digest_auth(const std::string& auth_header) {
     std::map<std::string, std::string> result;
 
-    // Check if it starts with "Digest "
-    if (auth_header.find("Digest ") != 0) {
+    // Check if it starts with "Digest " and has content after
+    if (auth_header.length() <= 7 || auth_header.find("Digest ") != 0) {
         return result;
     }
 
     std::string params = auth_header.substr(7);
+    if (params.empty()) {
+        return result;
+    }
 
     // Parse key=value pairs
     size_t pos = 0;
@@ -203,8 +211,18 @@ std::map<std::string, std::string> Auth::parse_digest_auth(const std::string& au
         std::string key = params.substr(pos, eq_pos - pos);
 
         // Trim whitespace from key
-        key.erase(0, key.find_first_not_of(" \t"));
-        key.erase(key.find_last_not_of(" \t") + 1);
+        size_t first = key.find_first_not_of(" \t");
+        if (first != std::string::npos) {
+            size_t last = key.find_last_not_of(" \t");
+            key = key.substr(first, (last - first + 1));
+        } else {
+            key.clear();
+        }
+
+        if (key.empty()) {
+            pos = eq_pos + 1;
+            continue;
+        }
 
         // Find value (quoted or unquoted)
         pos = eq_pos + 1;
@@ -233,8 +251,13 @@ std::map<std::string, std::string> Auth::parse_digest_auth(const std::string& au
                 pos = comma_pos;
             }
             // Trim whitespace from value
-            value.erase(0, value.find_first_not_of(" \t"));
-            value.erase(value.find_last_not_of(" \t") + 1);
+            size_t first = value.find_first_not_of(" \t");
+            if (first != std::string::npos) {
+                size_t last = value.find_last_not_of(" \t");
+                value = value.substr(first, (last - first + 1));
+            } else {
+                value.clear();
+            }
         }
 
         result[key] = value;
@@ -416,12 +439,26 @@ void Auth::load_users_from_file(const std::string& filename) {
         std::string username = line.substr(0, colon_pos);
         std::string password = line.substr(colon_pos + 1);
 
-        // Trim whitespace
-        username.erase(0, username.find_first_not_of(" \t"));
-        username.erase(username.find_last_not_of(" \t\r\n") + 1);
-        password.erase(0, password.find_first_not_of(" \t"));
-        password.erase(password.find_last_not_of(" \t\r\n") + 1);
+        // Trim whitespace from username
+        size_t first = username.find_first_not_of(" \t");
+        if (first != std::string::npos) {
+            size_t last = username.find_last_not_of(" \t\r\n");
+            username = username.substr(first, (last - first + 1));
+        } else {
+            username.clear();
+        }
 
-        add_user(username, password);
+        // Trim whitespace from password
+        first = password.find_first_not_of(" \t");
+        if (first != std::string::npos) {
+            size_t last = password.find_last_not_of(" \t\r\n");
+            password = password.substr(first, (last - first + 1));
+        } else {
+            password.clear();
+        }
+
+        if (!username.empty() && !password.empty()) {
+            add_user(username, password);
+        }
     }
 }
