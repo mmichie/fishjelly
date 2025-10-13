@@ -44,7 +44,15 @@
   - [x] 416 Range Not Satisfiable
   - [x] Accept-Ranges header
   - [x] HEAD with Range support
-- [ ] Implement authentication (Basic and Digest)
+- [x] Implement authentication (Basic and Digest) - **Completed! ✓**
+  - [x] Auth module with Basic and Digest support
+  - [x] Base64 encoding/decoding
+  - [x] MD5 hashing for Digest auth
+  - [x] Nonce generation and validation
+  - [x] Protected path configuration
+  - [x] User management
+  - [x] 401 Unauthorized responses with WWW-Authenticate
+  - [x] Directory index file resolution
 - [ ] Add SSL/TLS support using ASIO SSL
 - [ ] WebSocket support
 - [ ] HTTP/2 support
