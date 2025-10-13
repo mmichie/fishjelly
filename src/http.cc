@@ -269,6 +269,11 @@ std::string Http::sanitizeFilename(std::string_view filename) {
             filename = filename.substr(0, pos);
         }
         path = std::filesystem::path("htdocs") / filename;
+
+        // If the path is a directory, append index.html
+        if (std::filesystem::is_directory(path)) {
+            path = path / "index.html";
+        }
     }
 
     return path.string();
