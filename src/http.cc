@@ -22,9 +22,6 @@ Http::Http() {
     // Middleware can be set up explicitly with setupDefaultMiddleware()
 
     // Configure authentication users (hardcoded for demo)
-    // NOTE: load_users_from_file() has a string parsing bug that causes
-    // std::out_of_range exceptions. Needs debugging before it can be used.
-    // TODO: Fix string trimming in Auth::load_users_from_file()
     auth.add_user("admin", "secret123");
     auth.add_user("testuser", "password");
     auth.add_user("demo", "demo");
@@ -217,7 +214,8 @@ void Http::start(int server_port, int read_timeout, int write_timeout, int num_w
             /* Child */
             if (pid == 0) {
                 // First request doesn't use timeout
-                keep_alive = parseHeader(getHeader(false));
+                std::string header_str = getHeader(false);
+                keep_alive = parseHeader(header_str);
                 while (keep_alive) {
                     // Subsequent requests use timeout for keep-alive
                     std::string header = getHeader(true);
@@ -1458,8 +1456,10 @@ void Http::processHeadRequest(const std::map<std::string, std::string>& headerma
 void Http::processGetRequest(const std::map<std::string, std::string>& headermap,
                              std::string_view request_line, bool keep_alive) {
     auto it = headermap.find("GET");
-    if (it == headermap.end())
+
+    if (it == headermap.end()) {
         return;
+    }
 
     // Check authentication first
     if (!checkAuthentication(it->second, "GET", headermap, keep_alive)) {
