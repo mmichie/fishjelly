@@ -1834,8 +1834,23 @@ void Http::sendHeader(int code, int size, std::string_view file_type, bool keep_
     case 204:
         headerStream << "HTTP/1.1 204 No Content\r\n";
         break;
+    case 301:
+        headerStream << "HTTP/1.1 301 Moved Permanently\r\n";
+        break;
+    case 302:
+        headerStream << "HTTP/1.1 302 Found\r\n";
+        break;
+    case 303:
+        headerStream << "HTTP/1.1 303 See Other\r\n";
+        break;
     case 304:
         headerStream << "HTTP/1.1 304 Not Modified\r\n";
+        break;
+    case 307:
+        headerStream << "HTTP/1.1 307 Temporary Redirect\r\n";
+        break;
+    case 308:
+        headerStream << "HTTP/1.1 308 Permanent Redirect\r\n";
         break;
     case 206:
         headerStream << "HTTP/1.1 206 Partial Content\r\n";
@@ -1845,6 +1860,9 @@ void Http::sendHeader(int code, int size, std::string_view file_type, bool keep_
         break;
     case 401:
         headerStream << "HTTP/1.1 401 Unauthorized\r\n";
+        break;
+    case 403:
+        headerStream << "HTTP/1.1 403 Forbidden\r\n";
         break;
     case 416:
         headerStream << "HTTP/1.1 416 Range Not Satisfiable\r\n";
@@ -1911,6 +1929,33 @@ void Http::sendHeader(int code, int size, std::string_view file_type, bool keep_
 
     if (sock) {
         sock->write_line(lastHeader);
+    }
+}
+
+/**
+ * Send HTTP redirect response with Location header
+ */
+void Http::sendRedirect(int code, const std::string& location, bool keep_alive) {
+    // Validate that code is a redirect status code
+    if (code < 300 || code >= 400) {
+        std::cerr << "Warning: sendRedirect called with non-3xx status code: " << code << std::endl;
+    }
+
+    // Create extra headers with Location
+    std::vector<std::string> headers = {"Location: " + location};
+
+    // Send minimal HTML body for clients that don't follow redirects
+    std::string body = std::format("<!DOCTYPE html>\n"
+                                   "<html>\n"
+                                   "<head><title>Redirect</title></head>\n"
+                                   "<body><p>Redirecting to <a href=\"{}\">{}</a></p></body>\n"
+                                   "</html>\n",
+                                   location, location);
+
+    sendHeader(code, body.length(), "text/html", keep_alive, headers);
+
+    if (sock) {
+        sock->write_line(body);
     }
 }
 
