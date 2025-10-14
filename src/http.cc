@@ -1568,21 +1568,16 @@ void Http::processGetRequest(const std::map<std::string, std::string>& headermap
         // Set the cookie
         setCookie(cookie_name, cookie_value, "/", 3600); // 1 hour
 
-        // Redirect back to demo
-        std::string response =
-            "<html><head><meta http-equiv='refresh' content='0;url=/cookie-demo'></head>";
-        response += "<body>Setting cookie and redirecting...</body></html>";
-
-        sendHeader(200, response.length(), "text/html", keep_alive);
-        sock->write_line(response);
+        // Redirect back to demo using proper HTTP redirect
+        sendRedirect(302, "/cookie-demo", keep_alive);
 
         // Log request
         Log& log = Log::getInstance();
         log.openLogFile("logs/access_log");
         auto referer_it = headermap.find("Referer");
         auto user_agent_it = headermap.find("User-Agent");
-        log.writeLogLine(inet_ntoa(sock->client.sin_addr), std::string(request_line), 200,
-                         response.length(), referer_it != headermap.end() ? referer_it->second : "",
+        log.writeLogLine(inet_ntoa(sock->client.sin_addr), std::string(request_line), 302, 0,
+                         referer_it != headermap.end() ? referer_it->second : "",
                          user_agent_it != headermap.end() ? user_agent_it->second : "");
         return;
     }
@@ -1594,21 +1589,16 @@ void Http::processGetRequest(const std::map<std::string, std::string>& headermap
         setCookie("user", "", "/", 0);
         setCookie("theme", "", "/", 0);
 
-        // Redirect back to demo
-        std::string response =
-            "<html><head><meta http-equiv='refresh' content='0;url=/cookie-demo'></head>";
-        response += "<body>Clearing cookies and redirecting...</body></html>";
-
-        sendHeader(200, response.length(), "text/html", keep_alive);
-        sock->write_line(response);
+        // Redirect back to demo using proper HTTP redirect
+        sendRedirect(302, "/cookie-demo", keep_alive);
 
         // Log request
         Log& log = Log::getInstance();
         log.openLogFile("logs/access_log");
         auto referer_it = headermap.find("Referer");
         auto user_agent_it = headermap.find("User-Agent");
-        log.writeLogLine(inet_ntoa(sock->client.sin_addr), std::string(request_line), 200,
-                         response.length(), referer_it != headermap.end() ? referer_it->second : "",
+        log.writeLogLine(inet_ntoa(sock->client.sin_addr), std::string(request_line), 302, 0,
+                         referer_it != headermap.end() ? referer_it->second : "",
                          user_agent_it != headermap.end() ? user_agent_it->second : "");
         return;
     }
@@ -1652,6 +1642,22 @@ void Http::processGetRequest(const std::map<std::string, std::string>& headermap
                 sock->write_line(error_msg);
                 return;
             }
+        }
+    }
+
+    // Check if file exists and we have permission to read it
+    struct stat file_stat;
+    if (stat(filename.c_str(), &file_stat) == 0) {
+        // File exists - check if we have read permission
+        if (access(filename.c_str(), R_OK) != 0) {
+            // File exists but we don't have permission to read it
+            std::string error_msg = "<html><head><title>403 Forbidden</title></head>"
+                                    "<body><h1>403 Forbidden</h1>"
+                                    "<p>You don't have permission to access this resource.</p>"
+                                    "</body></html>";
+            sendHeader(403, error_msg.length(), "text/html", keep_alive);
+            sock->write_line(error_msg);
+            return;
         }
     }
 

@@ -216,8 +216,19 @@ int main(int argc, char* argv[]) {
 
     setupSignals();
 
+    // Change to base directory if it exists and we're not already in it
     try {
-        std::filesystem::current_path("base");
+        auto current = std::filesystem::current_path();
+        // Check if we're not already in the base directory
+        if (current.filename() != "base" && std::filesystem::exists("base")) {
+            std::filesystem::current_path("base");
+        } else if (current.filename() != "base" && !std::filesystem::exists("htdocs")) {
+            // Not in base and no base subdirectory exists
+            std::cerr << "Error: Cannot find base directory. Please run from project root or base "
+                         "directory."
+                      << std::endl;
+            return 1;
+        }
     } catch (const std::filesystem::filesystem_error& e) {
         std::cerr << "Error changing directory: " << e.what() << std::endl;
         return 1;
