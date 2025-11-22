@@ -267,8 +267,7 @@ void Http::sendFileWithMiddleware(std::string_view filename, const std::string& 
             ctx.response_body = std::string(buffer.begin(), buffer.end());
 
             // Determine content type
-            Mime mime;
-            mime.readMimeConfig("mime.types");
+            Mime& mime = Mime::getInstance();
             ctx.content_type = mime.getMimeFromExtension(filename);
         }
     }
@@ -1303,8 +1302,7 @@ void Http::processHeadRequest(const std::map<std::string, std::string>& headerma
     auto size = file.tellg();
 
     // Get MIME type
-    Mime mime;
-    mime.readMimeConfig("mime.types");
+    Mime& mime = Mime::getInstance();
     std::string content_type = mime.getMimeFromExtension(filename);
 
     // Check for Range header
@@ -1631,8 +1629,7 @@ void Http::processGetRequest(const std::map<std::string, std::string>& headermap
     }
 
     // Get MIME type
-    Mime mime;
-    mime.readMimeConfig("mime.types");
+    Mime& mime = Mime::getInstance();
     std::string content_type = mime.getMimeFromExtension(filename);
 
     // Check for Range header

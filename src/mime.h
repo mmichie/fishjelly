@@ -9,10 +9,18 @@
 
 class Mime {
   public:
+    // Get singleton instance
+    static Mime& getInstance();
+
+    // Delete copy constructor and assignment operator
+    Mime(const Mime&) = delete;
+    Mime& operator=(const Mime&) = delete;
+
     bool readMimeConfig(std::string_view filename);
     std::string getMimeFromExtension(std::string_view filename);
 
   private:
+    Mime(); // Private constructor for singleton - loads mime.types
     std::map<std::string, std::string> mimemap;
 };
 

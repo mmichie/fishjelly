@@ -199,8 +199,7 @@ void Http2Session::process_request(int32_t stream_id) {
     }
 
     // Get MIME type
-    Mime mime;
-    mime.readMimeConfig("mime.types");
+    Mime& mime = Mime::getInstance();
     std::string content_type = mime.getMimeFromExtension(file_path);
 
     // Read file

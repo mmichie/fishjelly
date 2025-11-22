@@ -1,7 +1,18 @@
 #include "mime.h"
 #include <fstream>
 #include <iostream>
+#include <mutex>
 #include <sstream>
+
+// Singleton implementation
+Mime& Mime::getInstance() {
+    static Mime instance; // Thread-safe initialization since C++11
+    return instance;
+}
+
+// Constructor - automatically loads mime.types
+Mime::Mime() { readMimeConfig("mime.types"); }
+
 #include <vector>
 
 bool Mime::readMimeConfig(std::string_view filename) {
