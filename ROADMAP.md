@@ -53,12 +53,12 @@
   - [x] User management
   - [x] 401 Unauthorized responses with WWW-Authenticate
   - [x] Directory index file resolution
-- [ ] Complete HTTP status code coverage
-  - [ ] 403 Forbidden (for permission denied scenarios)
-  - [ ] 3xx Redirects (301 Moved Permanently, 302 Found, 307 Temporary Redirect, 308 Permanent Redirect)
-  - [ ] 405 Method Not Allowed (required for HTTP/1.1 compliance)
-  - [ ] 429 Too Many Requests (rate limiting)
-  - [ ] 503 Service Unavailable (maintenance/overload)
+- [x] Complete HTTP status code coverage - **Completed! ✓**
+  - [x] 403 Forbidden (for permission denied scenarios)
+  - [x] 3xx Redirects (301 Moved Permanently, 302 Found, 307 Temporary Redirect, 308 Permanent Redirect)
+  - [x] 405 Method Not Allowed (required for HTTP/1.1 compliance)
+  - [x] 429 Too Many Requests (rate limiting with configurable limits, Retry-After header)
+  - [x] 503 Service Unavailable (maintenance mode with configurable message)
 - [ ] Add SSL/TLS support using ASIO SSL
 - [ ] WebSocket support
 - [ ] HTTP/2 support
