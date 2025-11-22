@@ -1,5 +1,7 @@
 #include "webserver.h"
 #include "asio_server.h"
+#include "asio_ssl_server.h"
+#include "ssl_context.h"
 #include <argparse.hpp>
 #include <csignal>
 #include <filesystem>
@@ -116,6 +118,11 @@ struct CommandLineArgs {
     int write_timeout;           // Write timeout in seconds
     int workers;                 // Number of worker processes (0 = traditional fork model)
     int max_requests_per_worker; // Max requests per worker before restart
+    bool use_ssl;                // Enable SSL/TLS (requires --asio)
+    int ssl_port;                // SSL port (default: 443)
+    std::string ssl_cert;        // Path to SSL certificate
+    std::string ssl_key;         // Path to SSL private key
+    std::string ssl_dh;          // Path to DH parameters (optional)
 };
 
 CommandLineArgs parseCommandLineOptions(int argc, char* argv[]) {
@@ -170,6 +177,32 @@ CommandLineArgs parseCommandLineOptions(int argc, char* argv[]) {
         .scan<'i', int>()
         .metavar("N");
 
+    program.add_argument("--ssl")
+        .help("enable SSL/TLS (requires --asio)")
+        .default_value(false)
+        .implicit_value(true);
+
+    program.add_argument("--ssl-port")
+        .help("SSL port to listen on")
+        .default_value(443)
+        .scan<'i', int>()
+        .metavar("PORT");
+
+    program.add_argument("--ssl-cert")
+        .help("path to SSL certificate file (PEM format)")
+        .default_value(std::string("ssl/server-cert.pem"))
+        .metavar("FILE");
+
+    program.add_argument("--ssl-key")
+        .help("path to SSL private key file (PEM format)")
+        .default_value(std::string("ssl/server-key.pem"))
+        .metavar("FILE");
+
+    program.add_argument("--ssl-dh")
+        .help("path to DH parameters file (optional)")
+        .default_value(std::string("ssl/dhparam.pem"))
+        .metavar("FILE");
+
     try {
         program.parse_args(argc, argv);
     } catch (const std::runtime_error& err) {
@@ -187,7 +220,12 @@ CommandLineArgs parseCommandLineOptions(int argc, char* argv[]) {
             .read_timeout = program.get<int>("--read-timeout"),
             .write_timeout = program.get<int>("--write-timeout"),
             .workers = program.get<int>("--workers"),
-            .max_requests_per_worker = program.get<int>("--max-requests-per-worker")};
+            .max_requests_per_worker = program.get<int>("--max-requests-per-worker"),
+            .use_ssl = program.get<bool>("--ssl"),
+            .ssl_port = program.get<int>("--ssl-port"),
+            .ssl_cert = program.get<std::string>("--ssl-cert"),
+            .ssl_key = program.get<std::string>("--ssl-key"),
+            .ssl_dh = program.get<std::string>("--ssl-dh")};
 }
 
 /**
@@ -237,10 +275,37 @@ int main(int argc, char* argv[]) {
     createPidFile("fishjelly.pid", pid);
 
     if (args.use_asio) {
-        // Use ASIO-based server
-        AsioServer server(args.port, args.test_requests);
-        server.run();
+        if (args.use_ssl) {
+            // Use ASIO SSL server
+            try {
+                SSLContext ssl_context;
+                ssl_context.load_certificate(args.ssl_cert);
+                ssl_context.load_private_key(args.ssl_key);
+
+                // Load DH parameters if file exists
+                if (std::filesystem::exists(args.ssl_dh)) {
+                    ssl_context.load_dh_params(args.ssl_dh);
+                }
+
+                AsioSSLServer server(args.ssl_port, ssl_context, args.test_requests);
+                server.run();
+            } catch (const std::exception& e) {
+                std::cerr << "SSL Error: " << e.what() << std::endl;
+                std::cerr << "\nTo generate test certificates, run:" << std::endl;
+                std::cerr << "  scripts/generate-ssl-cert.sh" << std::endl;
+                return 1;
+            }
+        } else {
+            // Use ASIO-based server (HTTP)
+            AsioServer server(args.port, args.test_requests);
+            server.run();
+        }
     } else {
+        if (args.use_ssl) {
+            std::cerr << "Error: SSL/TLS requires --asio flag" << std::endl;
+            std::cerr << "Usage: shelob --asio --ssl --ssl-port 8443" << std::endl;
+            return 1;
+        }
         // Use traditional fork-based server
         Http webserver;
         webserver.setTestMode(args.test_requests);

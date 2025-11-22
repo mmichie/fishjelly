@@ -34,7 +34,11 @@ lib_sources = files(
   'content_negotiator.h',
   'content_negotiator.cc',
   'auth.h',
-  'auth.cc'
+  'auth.cc',
+  'ssl_context.h',
+  'ssl_context.cc',
+  'asio_ssl_server.h',
+  'asio_ssl_server.cc'
 )
 
 # Create static library for testing
