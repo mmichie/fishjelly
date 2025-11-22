@@ -1,6 +1,8 @@
 #include "asio_server.h"
 #include "asio_socket_adapter.h"
 #include "http.h"
+#include "websocket_handler.h"
+#include <algorithm>
 #include <boost/asio/experimental/awaitable_operators.hpp>
 #include <chrono>
 #include <iostream>
@@ -63,18 +65,26 @@ asio::awaitable<void> AsioServer::handle_connection(tcp::socket socket) {
         // Get client endpoint for logging
         auto client_endpoint = socket.remote_endpoint();
 
+        // First request doesn't use timeout
+        std::string header = co_await read_http_request(socket, false);
+        if (header.empty()) {
+            co_return;
+        }
+
+        // Check if this is a WebSocket upgrade request
+        if (is_websocket_upgrade(header)) {
+            std::cout << "WebSocket upgrade detected from " << client_endpoint << std::endl;
+            co_await WebSocketHandler::handle_session(std::move(socket), header);
+            co_return;
+        }
+
+        // Process as regular HTTP
         // Create socket adapter
         AsioSocketAdapter socket_adapter(&socket, client_endpoint);
 
         // Create HTTP handler with the adapter
         Http http;
         http.sock = std::unique_ptr<Socket>(&socket_adapter);
-
-        // First request doesn't use timeout
-        std::string header = co_await read_http_request(socket, false);
-        if (header.empty()) {
-            co_return;
-        }
 
         // Provide the request data to the adapter
         socket_adapter.setRequestData(header);
@@ -185,4 +195,15 @@ asio::awaitable<void> AsioServer::write_response(tcp::socket& socket, const std:
     } catch (const std::exception& e) {
         // Write error - client may have disconnected
     }
+}
+
+bool AsioServer::is_websocket_upgrade(const std::string& header) {
+    // Convert header to lowercase for case-insensitive comparison
+    std::string lower_header = header;
+    std::transform(lower_header.begin(), lower_header.end(), lower_header.begin(), ::tolower);
+
+    // Check for "upgrade: websocket" and "connection: upgrade"
+    return (lower_header.find("upgrade: websocket") != std::string::npos &&
+            lower_header.find("connection:") != std::string::npos &&
+            lower_header.find("upgrade") != std::string::npos);
 }

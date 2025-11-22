@@ -46,7 +46,9 @@ Fishjelly is a lightweight HTTP web server written in C++23 using Boost.ASIO for
 
 4. **AsioSocketAdapter (asio_socket_adapter.h/cc)**: Adapts ASIO sockets to the Socket interface, providing buffered I/O for HTTP protocol handling.
 
-5. **Webserver (webserver.h/cc)**: Application entry point handling command-line parsing, daemon mode, signal management (SIGINT), and PID file operations.
+5. **WebSocketHandler (websocket_handler.h/cc)**: Handles WebSocket connections using Boost.Beast. Detects HTTP Upgrade requests and manages WebSocket sessions with echo functionality.
+
+6. **Webserver (webserver.h/cc)**: Application entry point handling command-line parsing, daemon mode, signal management (SIGINT), and PID file operations.
 
 ### Component Relationships
 
@@ -78,6 +80,7 @@ The server operates from the `base/` directory which contains:
 - Abstract Socket interface for protocol handling
 - Middleware chain pattern for request/response processing
 - SSL/TLS support with modern cipher suites (TLS 1.2/1.3)
+- WebSocket support via Boost.Beast (RFC 6455)
 - File-based configuration (mime.types)
 - Apache-style access logging
 

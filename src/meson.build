@@ -37,7 +37,9 @@ lib_sources = files(
   'ssl_context.h',
   'ssl_context.cc',
   'asio_ssl_server.h',
-  'asio_ssl_server.cc'
+  'asio_ssl_server.cc',
+  'websocket_handler.h',
+  'websocket_handler.cc'
 )
 
 # Create static library for testing

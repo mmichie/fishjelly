@@ -38,6 +38,9 @@ class AsioServer {
     // Write response to socket
     asio::awaitable<void> write_response(tcp::socket& socket, const std::string& response);
 
+    // Check if request is a WebSocket upgrade
+    bool is_websocket_upgrade(const std::string& header);
+
     asio::io_context io_context_;
     tcp::acceptor acceptor_;
     asio::signal_set signals_;

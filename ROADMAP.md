@@ -67,7 +67,14 @@
   - [x] AsioSSLServer with async SSL handshakes and timeout handling
   - [x] Self-signed certificate generation script for testing
   - [x] Command-line options (--ssl, --ssl-port, --ssl-cert, --ssl-key)
-- [ ] WebSocket support
+- [x] WebSocket support - **Completed! ✓**
+  - [x] Boost.Beast WebSocket integration
+  - [x] HTTP to WebSocket upgrade detection
+  - [x] Echo server implementation
+  - [x] Binary and text frame support
+  - [x] Automatic ping/pong keep-alive
+  - [x] Graceful close handshake
+  - [x] Python test client (scripts/testing/test_websocket.py)
 - [ ] HTTP/2 support
 
 ## Architecture Notes
