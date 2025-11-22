@@ -2,16 +2,20 @@
 
 #ifdef HAVE_NGHTTP2
 
+#include "connection_timeouts.h"
 #include "log.h"
 #include "mime.h"
 #include "request_limits.h"
 #include "security_middleware.h"
+#include <boost/asio/experimental/awaitable_operators.hpp>
 #include <boost/asio/use_awaitable.hpp>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <sstream>
+
+using namespace boost::asio::experimental::awaitable_operators;
 
 // ============================================================================
 // Http2Session Implementation
@@ -383,14 +387,25 @@ asio::awaitable<void> Http2Session::start() {
                                 sizeof(settings) / sizeof(settings[0]));
         nghttp2_session_send(session_);
 
-        // Main HTTP/2 processing loop
+        // Main HTTP/2 processing loop with timeout protection
         std::vector<uint8_t> buffer(8192);
 
         while (true) {
-            // Read from socket
-            auto [ec, bytes_read] = co_await socket_.async_read_some(
-                asio::buffer(buffer), asio::as_tuple(asio::use_awaitable));
+            // Read from socket with timeout (protects against slow HTTP/2 attacks)
+            asio::steady_timer timer(socket_.get_executor());
+            timer.expires_after(std::chrono::seconds(ConnectionTimeouts::READ_HEADER_TIMEOUT_SEC));
 
+            auto result = co_await (socket_.async_read_some(asio::buffer(buffer),
+                                                            asio::as_tuple(asio::use_awaitable)) ||
+                                    timer.async_wait(asio::as_tuple(asio::use_awaitable)));
+
+            if (result.index() == 1) {
+                // Timeout occurred - terminate connection
+                std::cerr << "HTTP/2 read timeout - possible slow attack" << std::endl;
+                break;
+            }
+
+            auto [ec, bytes_read] = std::get<0>(result);
             if (ec) {
                 break;
             }
@@ -515,8 +530,27 @@ asio::awaitable<void> Http2Server::listener() {
 
 asio::awaitable<void> Http2Server::handle_connection(ssl_socket socket) {
     try {
-        // Perform SSL handshake
-        co_await socket.async_handshake(asio::ssl::stream_base::server, asio::use_awaitable);
+        // Perform SSL handshake with timeout
+        asio::steady_timer handshake_timer(socket.get_executor());
+        handshake_timer.expires_after(
+            std::chrono::seconds(ConnectionTimeouts::SSL_HANDSHAKE_TIMEOUT_SEC));
+
+        auto handshake_result =
+            co_await (socket.async_handshake(asio::ssl::stream_base::server,
+                                             asio::as_tuple(asio::use_awaitable)) ||
+                      handshake_timer.async_wait(asio::as_tuple(asio::use_awaitable)));
+
+        if (handshake_result.index() == 1) {
+            // Handshake timeout
+            std::cerr << "HTTP/2 SSL handshake timeout" << std::endl;
+            co_return;
+        }
+
+        auto [handshake_ec] = std::get<0>(handshake_result);
+        if (handshake_ec) {
+            std::cerr << "HTTP/2 SSL handshake failed: " << handshake_ec.message() << std::endl;
+            co_return;
+        }
 
         // Create HTTP/2 session
         auto session = std::make_shared<Http2Session>(std::move(socket));

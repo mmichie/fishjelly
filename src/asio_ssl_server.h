@@ -1,6 +1,7 @@
 #ifndef ASIO_SSL_SERVER_H
 #define ASIO_SSL_SERVER_H
 
+#include "connection_timeouts.h"
 #include "ssl_context.h"
 #include <atomic>
 #include <boost/asio.hpp>
@@ -58,6 +59,10 @@ class AsioSSLServer {
     // Write response to SSL socket
     asio::awaitable<void> write_response(ssl_socket& socket, const std::string& response);
 
+    // Write response with timeout protection (for slow read attack prevention)
+    asio::awaitable<bool> write_response_with_timeout(ssl_socket& socket,
+                                                      const std::string& response);
+
     asio::io_context io_context_;
     ssl::context& ssl_context_;
     tcp::acceptor acceptor_;
@@ -67,9 +72,6 @@ class AsioSSLServer {
     int test_requests_;
     std::atomic<int> request_count_{0};
     bool stopping_{false};
-
-    static constexpr int KEEPALIVE_TIMEOUT_SEC = 5;
-    static constexpr int SSL_HANDSHAKE_TIMEOUT_SEC = 10;
 };
 
 #endif // ASIO_SSL_SERVER_H

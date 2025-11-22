@@ -1,5 +1,6 @@
 #include "asio_ssl_server.h"
 #include "asio_socket_adapter.h"
+#include "connection_timeouts.h"
 #include "http.h"
 #include <boost/asio/experimental/awaitable_operators.hpp>
 #include <chrono>
@@ -77,7 +78,8 @@ asio::awaitable<void> AsioSSLServer::handle_connection(ssl_socket socket) {
 
         // Perform SSL handshake with timeout
         asio::steady_timer handshake_timer(socket.get_executor());
-        handshake_timer.expires_after(std::chrono::seconds(SSL_HANDSHAKE_TIMEOUT_SEC));
+        handshake_timer.expires_after(
+            std::chrono::seconds(ConnectionTimeouts::SSL_HANDSHAKE_TIMEOUT_SEC));
 
         auto handshake_result = co_await (
             socket.async_handshake(ssl::stream_base::server, asio::as_tuple(asio::use_awaitable)) ||
@@ -149,9 +151,9 @@ asio::awaitable<std::string> AsioSSLServer::read_http_request(ssl_socket& socket
         asio::streambuf buffer;
 
         if (use_timeout) {
-            // Set up timeout
+            // Use keep-alive timeout for subsequent requests
             asio::steady_timer timer(socket.get_executor());
-            timer.expires_after(std::chrono::seconds(KEEPALIVE_TIMEOUT_SEC));
+            timer.expires_after(std::chrono::seconds(ConnectionTimeouts::KEEPALIVE_TIMEOUT_SEC));
 
             // Race between read and timeout
             auto result = co_await (asio::async_read_until(socket, buffer, "\r\n\r\n",
@@ -168,9 +170,21 @@ asio::awaitable<std::string> AsioSSLServer::read_http_request(ssl_socket& socket
                 co_return "";
             }
         } else {
-            // No timeout for first request
-            auto [ec, bytes_transferred] = co_await asio::async_read_until(
-                socket, buffer, "\r\n\r\n", asio::as_tuple(asio::use_awaitable));
+            // Use header read timeout for initial request (protects against Slowloris)
+            asio::steady_timer timer(socket.get_executor());
+            timer.expires_after(std::chrono::seconds(ConnectionTimeouts::READ_HEADER_TIMEOUT_SEC));
+
+            // Race between read and timeout
+            auto result = co_await (asio::async_read_until(socket, buffer, "\r\n\r\n",
+                                                           asio::as_tuple(asio::use_awaitable)) ||
+                                    timer.async_wait(asio::as_tuple(asio::use_awaitable)));
+
+            if (result.index() == 1) {
+                // Timeout occurred - likely Slowloris attack
+                co_return "";
+            }
+
+            auto [ec, bytes_transferred] = std::get<0>(result);
             if (ec || bytes_transferred == 0) {
                 co_return "";
             }
@@ -197,5 +211,35 @@ asio::awaitable<void> AsioSSLServer::write_response(ssl_socket& socket,
         co_await asio::async_write(socket, asio::buffer(response), asio::use_awaitable);
     } catch (const std::exception& e) {
         // Write error - client may have disconnected
+    }
+}
+
+asio::awaitable<bool> AsioSSLServer::write_response_with_timeout(ssl_socket& socket,
+                                                                 const std::string& response) {
+    try {
+        // Set up timeout for writing response (protects against Slow Read attacks)
+        asio::steady_timer timer(socket.get_executor());
+        timer.expires_after(std::chrono::seconds(ConnectionTimeouts::WRITE_RESPONSE_TIMEOUT_SEC));
+
+        // Race between write and timeout
+        auto result = co_await (asio::async_write(socket, asio::buffer(response),
+                                                  asio::as_tuple(asio::use_awaitable)) ||
+                                timer.async_wait(asio::as_tuple(asio::use_awaitable)));
+
+        if (result.index() == 1) {
+            // Timeout occurred - likely Slow Read attack
+            co_return false;
+        }
+
+        // Check for write error
+        auto [ec, bytes_written] = std::get<0>(result);
+        if (ec) {
+            co_return false;
+        }
+
+        co_return true;
+    } catch (const std::exception& e) {
+        // Write error - client may have disconnected
+        co_return false;
     }
 }

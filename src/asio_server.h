@@ -1,6 +1,7 @@
 #ifndef ASIO_SERVER_H
 #define ASIO_SERVER_H
 
+#include "connection_timeouts.h"
 #include <atomic>
 #include <boost/asio.hpp>
 #include <boost/asio/awaitable.hpp>
@@ -38,6 +39,10 @@ class AsioServer {
     // Write response to socket
     asio::awaitable<void> write_response(tcp::socket& socket, const std::string& response);
 
+    // Write response with timeout protection (for slow read attack prevention)
+    asio::awaitable<bool> write_response_with_timeout(tcp::socket& socket,
+                                                      const std::string& response);
+
     // Check if request is a WebSocket upgrade
     bool is_websocket_upgrade(const std::string& header);
 
@@ -49,8 +54,6 @@ class AsioServer {
     int test_requests_;
     std::atomic<int> request_count_{0};
     bool stopping_{false};
-
-    static constexpr int KEEPALIVE_TIMEOUT_SEC = 5;
 };
 
 #endif // ASIO_SERVER_H

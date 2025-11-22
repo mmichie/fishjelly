@@ -1,5 +1,6 @@
 #include "asio_server.h"
 #include "asio_socket_adapter.h"
+#include "connection_timeouts.h"
 #include "http.h"
 #include "websocket_handler.h"
 #include <algorithm>
@@ -92,10 +93,15 @@ asio::awaitable<void> AsioServer::handle_connection(tcp::socket socket) {
         // Process the first request
         bool keep_alive = http.parseHeader(header);
 
-        // Send the response
+        // Send the response with timeout protection (against Slow Read attacks)
         std::string response = socket_adapter.getResponse();
         if (!response.empty()) {
-            co_await write_response(socket, response);
+            bool write_success = co_await write_response_with_timeout(socket, response);
+            if (!write_success) {
+                // Write timeout or error - terminate connection
+                http.sock.release();
+                co_return;
+            }
         }
 
         // Handle keep-alive
@@ -117,10 +123,15 @@ asio::awaitable<void> AsioServer::handle_connection(tcp::socket socket) {
 
             keep_alive = http.parseHeader(header);
 
-            // Send the response
+            // Send the response with timeout protection
             response = next_adapter.getResponse();
             if (!response.empty()) {
-                co_await write_response(socket, response);
+                bool write_success = co_await write_response_with_timeout(socket, response);
+                if (!write_success) {
+                    // Write timeout or error - terminate connection
+                    http.sock.release();
+                    break;
+                }
             }
         }
 
@@ -147,9 +158,9 @@ asio::awaitable<std::string> AsioServer::read_http_request(tcp::socket& socket, 
         asio::streambuf buffer;
 
         if (use_timeout) {
-            // Set up timeout
+            // Use keep-alive timeout for subsequent requests
             asio::steady_timer timer(socket.get_executor());
-            timer.expires_after(std::chrono::seconds(KEEPALIVE_TIMEOUT_SEC));
+            timer.expires_after(std::chrono::seconds(ConnectionTimeouts::KEEPALIVE_TIMEOUT_SEC));
 
             // Race between read and timeout
             auto result = co_await (asio::async_read_until(socket, buffer, "\r\n\r\n",
@@ -168,8 +179,26 @@ asio::awaitable<std::string> AsioServer::read_http_request(tcp::socket& socket, 
                 co_return "";
             }
         } else {
-            // No timeout
-            co_await asio::async_read_until(socket, buffer, "\r\n\r\n", asio::use_awaitable);
+            // Use header read timeout for initial request (protects against Slowloris)
+            asio::steady_timer timer(socket.get_executor());
+            timer.expires_after(std::chrono::seconds(ConnectionTimeouts::READ_HEADER_TIMEOUT_SEC));
+
+            // Race between read and timeout
+            auto result = co_await (asio::async_read_until(socket, buffer, "\r\n\r\n",
+                                                           asio::as_tuple(asio::use_awaitable)) ||
+                                    timer.async_wait(asio::as_tuple(asio::use_awaitable)));
+
+            if (result.index() == 1) {
+                // Timeout occurred - likely Slowloris attack
+                socket.cancel();
+                co_return "";
+            }
+
+            // Check for read error
+            auto [ec, bytes] = std::get<0>(result);
+            if (ec) {
+                co_return "";
+            }
         }
 
         // Convert buffer to string
@@ -194,6 +223,37 @@ asio::awaitable<void> AsioServer::write_response(tcp::socket& socket, const std:
         co_await asio::async_write(socket, asio::buffer(response), asio::use_awaitable);
     } catch (const std::exception& e) {
         // Write error - client may have disconnected
+    }
+}
+
+asio::awaitable<bool> AsioServer::write_response_with_timeout(tcp::socket& socket,
+                                                              const std::string& response) {
+    try {
+        // Set up timeout for writing response (protects against Slow Read attacks)
+        asio::steady_timer timer(socket.get_executor());
+        timer.expires_after(std::chrono::seconds(ConnectionTimeouts::WRITE_RESPONSE_TIMEOUT_SEC));
+
+        // Race between write and timeout
+        auto result = co_await (asio::async_write(socket, asio::buffer(response),
+                                                  asio::as_tuple(asio::use_awaitable)) ||
+                                timer.async_wait(asio::as_tuple(asio::use_awaitable)));
+
+        if (result.index() == 1) {
+            // Timeout occurred - likely Slow Read attack
+            socket.cancel();
+            co_return false;
+        }
+
+        // Check for write error
+        auto [ec, bytes_written] = std::get<0>(result);
+        if (ec) {
+            co_return false;
+        }
+
+        co_return true;
+    } catch (const std::exception& e) {
+        // Write error - client may have disconnected
+        co_return false;
     }
 }
 

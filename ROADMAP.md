@@ -270,40 +270,39 @@ Now that all planned phases are complete, here are additional features that coul
 
 #### PHASE 2: HIGH PRIORITY VULNERABILITIES
 
-**7. Slowloris / Slow Read Attacks** 🟠 HIGH
-- **Location**: Timeout handling throughout
+**7. Slowloris / Slow Read Attacks** ✅ FIXED (2025-11-22)
+- **Location**: `src/connection_timeouts.h`, `src/asio_server.cc`, `src/asio_ssl_server.cc`, `src/http2_server.cc`
 - **Issue**: Insufficient protection against slow HTTP attacks
-- **Current**: Basic timeouts exist but incomplete
-  ```cpp
-  static constexpr int KEEPALIVE_TIMEOUT_SEC = 5;
-  static constexpr int SSL_HANDSHAKE_TIMEOUT_SEC = 10;
-  ```
-- **Attacks**:
-  - Slowloris: Send partial headers, 1 byte every 10 seconds
-  - Slow POST: Send body at 1 byte/second
-  - Slow Read: Read response at 1 byte/minute
-- **Fix Required**:
-  - [ ] Implement per-stage timeouts:
-  ```cpp
-  static constexpr int READ_HEADER_TIMEOUT = 10;     // Initial headers
-  static constexpr int READ_BODY_TIMEOUT = 30;       // Body transfer
-  static constexpr int WRITE_TIMEOUT = 60;           // Response write
-  static constexpr int MIN_DATA_RATE = 1024;         // bytes/sec
-  ```
-  - [ ] Add bandwidth tracking per connection:
-  ```cpp
-  struct ConnectionState {
-      std::chrono::steady_clock::time_point last_activity;
-      size_t bytes_transferred;
-
-      bool is_too_slow() const {
-          auto elapsed = std::chrono::steady_clock::now() - last_activity;
-          auto seconds = std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
-          if (seconds == 0) return false;
-          return (bytes_transferred / seconds) < MIN_DATA_RATE;
-      }
-  };
-  ```
+- **Solution Implemented**:
+  - ✅ Created centralized timeout configuration (`connection_timeouts.h`)
+  - ✅ Implemented per-stage timeouts:
+    - READ_HEADER_TIMEOUT_SEC = 10s (protects against Slowloris)
+    - READ_BODY_TIMEOUT_SEC = 30s (protects against Slow POST)
+    - WRITE_RESPONSE_TIMEOUT_SEC = 60s (protects against Slow Read)
+    - SSL_HANDSHAKE_TIMEOUT_SEC = 10s (SSL handshake protection)
+    - KEEPALIVE_TIMEOUT_SEC = 5s (keep-alive connections)
+  - ✅ Created ConnectionState class for bandwidth tracking:
+    ```cpp
+    class ConnectionState {
+        std::chrono::steady_clock::time_point start_time_;
+        size_t bytes_transferred_;
+        bool is_too_slow() const;  // Checks MIN_DATA_RATE (1024 bytes/sec)
+    };
+    ```
+  - ✅ Applied timeouts to HTTP/1.1 server (AsioServer/AsioSSLServer):
+    - Initial request: READ_HEADER_TIMEOUT (10s)
+    - Keep-alive requests: KEEPALIVE_TIMEOUT (5s)
+    - Response writes: WRITE_RESPONSE_TIMEOUT (60s) with write_response_with_timeout()
+  - ✅ Applied timeouts to HTTP/2 server:
+    - SSL handshake timeout (10s)
+    - Read frame timeout (10s) in main processing loop
+  - ✅ Test suite created (`scripts/testing/test_slowloris.py`)
+    - Tests Slowloris attack protection
+    - Tests Slow Read attack protection
+    - Verifies legitimate clients unaffected
+    - Tests server resilience under multiple slow connections
+- **Testing**: Manual verification shows connections are terminated after 10s when headers aren't completed
+- **Security Impact**: Prevents resource exhaustion via connection holdopen attacks (Slowloris, Slow POST, Slow Read)
 
 **8. HTTP/2 Rapid Reset (CVE-2023-44487)** 🟠 HIGH
 - **Location**: `src/http2_server.cc` - No protection against rapid stream resets
@@ -544,16 +543,17 @@ endif
 3. ✅ HTTP request smuggling protection (CL.TE/TE.CL attacks) (2025-11-22)
 4. ✅ Plaintext password storage → argon2id hashed passwords (2025-11-22)
 5. ✅ Timing attack on password comparison → constant-time verification (2025-11-22)
+6. ✅ Slowloris/slow read protections → per-stage timeouts (2025-11-22)
 
 **Week 1 (Critical)**:
 1. ~~Fix plaintext password storage → hashed passwords~~ ✅ COMPLETED
 2. ~~Fix timing attacks → constant-time comparison~~ ✅ COMPLETED
-3. ~~Add request size limits everywhere~~ ✅ COMPLETED (already done)
+3. ~~Add request size limits everywhere~~ ✅ COMPLETED
 4. Add comprehensive input validation
 
 **Weeks 2-4 (High)**:
-1. HTTP request smuggling protections
-2. Slowloris/slow read protections
+1. ~~HTTP request smuggling protections~~ ✅ COMPLETED
+2. ~~Slowloris/slow read protections~~ ✅ COMPLETED
 3. HTTP/2 rapid reset protection
 4. HPACK bomb protection
 5. Integer overflow fixes
