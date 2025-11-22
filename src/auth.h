@@ -9,10 +9,14 @@
 /**
  * Authentication manager for HTTP Basic and Digest authentication
  * RFC 7617 (Basic) and RFC 7616 (Digest)
+ *
+ * Security: Uses argon2id for password hashing (OWASP recommendation)
+ * Passwords are never stored in plaintext, only as salted hashes
  */
 class Auth {
   private:
-    // User credentials storage (username -> password)
+    // User credentials storage (username -> password_hash)
+    // NOTE: Values are argon2id hashes, NOT plaintext passwords
     std::map<std::string, std::string> users_;
 
     // Protected paths (path -> realm)
@@ -28,8 +32,12 @@ class Auth {
     std::string base64_encode(const std::string& input);
     std::string base64_decode(const std::string& input);
 
-    // MD5 hashing for Digest auth
+    // MD5 hashing for Digest auth (legacy - only for Digest auth protocol)
     std::string md5_hash(const std::string& input);
+
+    // Secure password hashing (argon2id via libsodium)
+    std::string hash_password(const std::string& password);
+    bool verify_password(const std::string& password, const std::string& hash);
 
     // Nonce management
     std::string generate_nonce();

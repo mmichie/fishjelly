@@ -45,7 +45,7 @@ lib_sources = files(
 )
 
 # Build dependency list
-deps = [boost_dep, openssl_dep]
+deps = [boost_dep, openssl_dep, sodium_dep]
 if nghttp2_dep.found()
   deps += [nghttp2_dep]
 endif

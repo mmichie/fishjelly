@@ -6,13 +6,18 @@
 #include <iostream>
 #include <openssl/md5.h>
 #include <random>
+#include <sodium.h>
 #include <sstream>
+#include <stdexcept>
 
 /**
  * Constructor
  */
 Auth::Auth() {
-    // Initialize with empty user list
+    // Initialize libsodium (required before using any libsodium functions)
+    if (sodium_init() < 0) {
+        throw std::runtime_error("Failed to initialize libsodium");
+    }
 }
 
 /**
@@ -85,6 +90,8 @@ std::string Auth::base64_decode(const std::string& input) {
 
 /**
  * MD5 hash using OpenSSL
+ * NOTE: Only used for legacy Digest authentication protocol
+ * DO NOT use for password storage - use hash_password() instead
  */
 std::string Auth::md5_hash(const std::string& input) {
     unsigned char digest[MD5_DIGEST_LENGTH];
@@ -96,6 +103,50 @@ std::string Auth::md5_hash(const std::string& input) {
     }
 
     return ss.str();
+}
+
+/**
+ * Hash a password using argon2id (OWASP recommendation)
+ * Returns a PHC-formatted hash string that includes:
+ * - Algorithm identifier (argon2id)
+ * - Parameters (memory, iterations, parallelism)
+ * - Random salt (unique per password)
+ * - Password hash
+ *
+ * Security properties:
+ * - Unique salt per password (prevents rainbow tables)
+ * - Memory-hard (resistant to GPU/ASIC attacks)
+ * - Adjustable parameters for future-proofing
+ */
+std::string Auth::hash_password(const std::string& password) {
+    // Allocate buffer for hash output (PHC format string)
+    // crypto_pwhash_STRBYTES = 128 bytes (sufficient for PHC format)
+    char hashed_password[crypto_pwhash_STRBYTES];
+
+    // Use argon2id with interactive parameters (OWASP recommended for web apps)
+    // OPSLIMIT_INTERACTIVE: 2 iterations (fast enough for interactive login)
+    // MEMLIMIT_INTERACTIVE: 64MB of RAM (balance between security and performance)
+    if (crypto_pwhash_str(hashed_password, password.c_str(), password.length(),
+                          crypto_pwhash_OPSLIMIT_INTERACTIVE,
+                          crypto_pwhash_MEMLIMIT_INTERACTIVE) != 0) {
+        throw std::runtime_error("Password hashing failed - out of memory");
+    }
+
+    return std::string(hashed_password);
+}
+
+/**
+ * Verify a password against an argon2id hash
+ * Uses constant-time comparison to prevent timing attacks
+ *
+ * Returns:
+ * - true if password matches the hash
+ * - false if password doesn't match or hash is invalid
+ */
+bool Auth::verify_password(const std::string& password, const std::string& hash) {
+    // crypto_pwhash_str_verify performs constant-time comparison
+    // Returns 0 if verification succeeds, -1 if it fails
+    return crypto_pwhash_str_verify(hash.c_str(), password.c_str(), password.length()) == 0;
 }
 
 /**
@@ -271,10 +322,14 @@ std::map<std::string, std::string> Auth::parse_digest_auth(const std::string& au
 }
 
 /**
- * Add a user
+ * Add a user with password hashing
+ * The password is hashed using argon2id before storage
+ * SECURITY: Passwords are NEVER stored in plaintext
  */
 void Auth::add_user(const std::string& username, const std::string& password) {
-    users_[username] = password;
+    // Hash the password using argon2id (with automatic salt generation)
+    std::string password_hash = hash_password(password);
+    users_[username] = password_hash;
 }
 
 /**
@@ -325,6 +380,7 @@ bool Auth::is_protected(const std::string& path, std::string& realm) {
 
 /**
  * Validate Basic authentication
+ * Uses constant-time password verification to prevent timing attacks
  */
 bool Auth::validate_basic_auth(const std::string& auth_header) {
     auto params = parse_basic_auth(auth_header);
@@ -345,11 +401,26 @@ bool Auth::validate_basic_auth(const std::string& auth_header) {
         return false;
     }
 
-    return user_it->second == password_it->second;
+    // Verify password using constant-time comparison (prevents timing attacks)
+    // user_it->second contains the argon2id hash
+    // password_it->second contains the plaintext password from the client
+    return verify_password(password_it->second, user_it->second);
 }
 
 /**
  * Validate Digest authentication
+ *
+ * SECURITY WARNING: Digest authentication is DEPRECATED and incompatible with
+ * secure password hashing. This function will NOT work with passwords added
+ * via add_user() as they are stored as argon2id hashes, not plaintext.
+ *
+ * Digest auth requires plaintext passwords to compute MD5(username:realm:password),
+ * which violates modern security best practices.
+ *
+ * RECOMMENDATION: Use Basic authentication over HTTPS instead.
+ * Basic over HTTPS provides better security than Digest over HTTP.
+ *
+ * This function is retained only for backwards compatibility with legacy systems.
  */
 bool Auth::validate_digest_auth(const std::string& auth_header, const std::string& method,
                                 const std::string& uri) {
@@ -386,12 +457,25 @@ bool Auth::validate_digest_auth(const std::string& auth_header, const std::strin
         return false;
     }
 
+    // SECURITY ISSUE: This code path requires plaintext passwords
+    // It will NOT work with argon2id hashes stored by add_user()
+    // Digest auth is fundamentally incompatible with secure password storage
+    //
     // Calculate expected response
     // HA1 = MD5(username:realm:password)
     // HA2 = MD5(method:uri)
     // response = MD5(HA1:nonce:HA2)
 
     std::string realm = params.count("realm") ? params["realm"] : "Protected Area";
+
+    // Check if this is an argon2id hash (starts with $argon2id$)
+    // If so, Digest auth cannot work
+    if (user_it->second.find("$argon2id$") == 0) {
+        // Password is hashed - Digest auth not supported
+        return false;
+    }
+
+    // Legacy path: treat stored value as plaintext password (INSECURE)
     std::string ha1 = md5_hash(username_it->second + ":" + realm + ":" + user_it->second);
     std::string ha2 = md5_hash(method + ":" + uri_it->second);
     std::string expected_response = md5_hash(ha1 + ":" + nonce_it->second + ":" + ha2);
@@ -416,7 +500,21 @@ std::string Auth::generate_digest_challenge(const std::string& realm) {
 
 /**
  * Load users from file
- * Format: username:password (one per line)
+ * Format: username:value (one per line)
+ *
+ * The value can be either:
+ * 1. An argon2id hash (starts with $argon2id$) - secure, recommended
+ * 2. Plaintext password - INSECURE, for backwards compatibility only
+ *
+ * Migration strategy:
+ * - Existing plaintext passwords are automatically hashed on first use
+ * - To migrate, use the password migration tool (scripts/migrate_passwords.py)
+ * - Or manually hash passwords: use add_user() which automatically hashes
+ *
+ * Security note:
+ * - If value starts with $argon2id$, it's stored as-is (already hashed)
+ * - If value is plaintext, it's hashed before storage (via add_user())
+ * - Plaintext passwords in files are INSECURE and deprecated
  */
 void Auth::load_users_from_file(const std::string& filename) {
     std::ifstream file(filename);
@@ -425,7 +523,10 @@ void Auth::load_users_from_file(const std::string& filename) {
     }
 
     std::string line;
+    int line_number = 0;
     while (std::getline(file, line)) {
+        line_number++;
+
         // Skip empty lines and comments
         if (line.empty() || line[0] == '#') {
             continue;
@@ -433,11 +534,13 @@ void Auth::load_users_from_file(const std::string& filename) {
 
         size_t colon_pos = line.find(':');
         if (colon_pos == std::string::npos) {
+            std::cerr << "Warning: Invalid format in " << filename << " line " << line_number
+                      << " (missing colon)" << std::endl;
             continue;
         }
 
         std::string username = line.substr(0, colon_pos);
-        std::string password = line.substr(colon_pos + 1);
+        std::string value = line.substr(colon_pos + 1);
 
         // Trim whitespace from username
         size_t first = username.find_first_not_of(" \t");
@@ -448,17 +551,30 @@ void Auth::load_users_from_file(const std::string& filename) {
             username.clear();
         }
 
-        // Trim whitespace from password
-        first = password.find_first_not_of(" \t");
+        // Trim whitespace from value
+        first = value.find_first_not_of(" \t");
         if (first != std::string::npos) {
-            size_t last = password.find_last_not_of(" \t\r\n");
-            password = password.substr(first, (last - first + 1));
+            size_t last = value.find_last_not_of(" \t\r\n");
+            value = value.substr(first, (last - first + 1));
         } else {
-            password.clear();
+            value.clear();
         }
 
-        if (!username.empty() && !password.empty()) {
-            add_user(username, password);
+        if (username.empty() || value.empty()) {
+            continue;
+        }
+
+        // Check if value is already an argon2id hash
+        if (value.find("$argon2id$") == 0) {
+            // Already hashed - store directly
+            users_[username] = value;
+        } else {
+            // Plaintext password - hash it before storing
+            std::cerr << "Warning: Plaintext password detected for user '" << username << "' in "
+                      << filename << std::endl;
+            std::cerr << "         This is INSECURE. Please migrate to hashed passwords."
+                      << std::endl;
+            add_user(username, value); // This will hash the password
         }
     }
 }

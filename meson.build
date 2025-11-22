@@ -20,8 +20,11 @@ boost_dep = dependency('boost',
   required : true
 )
 
-# Find OpenSSL for authentication (MD5 hashing)
+# Find OpenSSL for authentication (MD5 hashing for legacy Digest auth)
 openssl_dep = dependency('openssl', required : true)
+
+# Find libsodium for secure password hashing (argon2id)
+sodium_dep = dependency('libsodium', required : true)
 
 # Find nghttp2 for HTTP/2 support (optional)
 # Using the C library directly since nghttp2-asio is deprecated

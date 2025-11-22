@@ -25,6 +25,8 @@ Http::Http() {
     // Middleware can be set up explicitly with setupDefaultMiddleware()
 
     // Configure authentication users (hardcoded for demo)
+    // SECURITY: Passwords are automatically hashed using argon2id before storage
+    // These plaintext values are never stored - only their hashes are kept in memory
     auth.add_user("admin", "secret123");
     auth.add_user("testuser", "password");
     auth.add_user("demo", "demo");
