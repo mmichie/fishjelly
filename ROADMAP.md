@@ -141,3 +141,62 @@ Fishjelly now offers a complete, modern HTTP/1.1 and HTTP/2 web server with ente
 - ✅ Phase 3: ASIO migration (dual architecture)
 - ✅ Phase 4: Essential features (all features complete)
 - ✅ Phase 5: Advanced features (ALL COMPLETE! 🎉)
+
+---
+
+## Future Enhancements (Optional)
+
+Now that all planned phases are complete, here are additional features that could be considered for future development:
+
+### Security & Performance Enhancements
+- [ ] **Request Size Limits** - Prevent memory exhaustion attacks
+- [ ] **Connection Limits** - Max connections per IP
+- [ ] **IP-based Access Control** - Allow/deny rules by IP
+- [ ] **Memory pool allocator** - Reduce allocation overhead
+- [ ] **Performance benchmarking suite** - Automated performance testing
+
+### Configuration & Management
+- [ ] **Configuration File System** - YAML/TOML config file support
+- [ ] **Virtual Hosts** - Multi-domain hosting support
+- [ ] **Hot Configuration Reload** - Zero-downtime config changes
+- [ ] **Custom Error Pages** - Configurable error pages per status code
+- [ ] **Server Status Page** - Real-time server statistics
+
+### Advanced Protocol Support
+- [ ] **HTTP/3 QUIC Support** - Latest protocol version
+- [ ] **FastCGI Support** - For PHP and other languages
+- [ ] **Python WSGI Support** - Integration with Python web applications
+- [ ] **gRPC Support** - HTTP/2 based RPC proxying
+
+### Reverse Proxy & Load Balancing Features
+- [ ] **Basic Reverse Proxy** - Proxy requests to backend servers
+- [ ] **Load Balancing Algorithms** - Round-robin, least connections, weighted
+- [ ] **Health Checks** - Active and passive backend health monitoring
+- [ ] **Circuit Breaker** - Automatic failover for unhealthy backends
+- [ ] **Service Discovery** - Integration with Consul, etcd
+- [ ] **Automatic HTTPS** - Let's Encrypt integration with ACME
+- [ ] **Metrics & Monitoring** - Prometheus metrics, OpenTelemetry support
+- [ ] **WebSocket Proxying** - Full duplex connection proxying
+
+### Modern Infrastructure Integration
+- [ ] **Docker Integration** - Watch Docker API for container changes
+- [ ] **Kubernetes Ingress Controller** - Native K8s ingress support
+- [ ] **Dashboard UI** - Web interface for monitoring and configuration
+- [ ] **GitOps Integration** - Config from Git repositories
+
+### Code Quality Tasks
+- [ ] **Fix TODO: Singleton optimization for Mime class** (http.cc:591, 653)
+- [ ] **Fix TODO: Abstract output interface for Http class** (asio_http_connection.cc:15)
+- [ ] **Fix BUG: File size race condition** (http.cc:657)
+- [ ] **Complete clang-tidy compliance** - Fix remaining linting issues
+- [ ] **Fuzzing Infrastructure** - Continuous fuzzing for security
+
+### Documentation
+- [ ] **API Documentation** - Complete API reference
+- [ ] **Deployment Guide** - Production deployment best practices
+- [ ] **Security Hardening Guide** - Security configuration guide
+- [ ] **Performance Tuning Guide** - Optimization documentation
+
+---
+
+**Note**: These are aspirational features for potential future development. The core web server is fully functional and production-ready as-is.
