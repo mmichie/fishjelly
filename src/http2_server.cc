@@ -54,7 +54,6 @@ ssize_t Http2Session::send_callback(nghttp2_session* session, const uint8_t* dat
 // Frame received callback
 int Http2Session::on_frame_recv_callback(nghttp2_session* session, const nghttp2_frame* frame,
                                          void* user_data) {
-    (void)session;
     auto* self = static_cast<Http2Session*>(user_data);
 
     switch (frame->hd.type) {
@@ -69,6 +68,43 @@ int Http2Session::on_frame_recv_callback(nghttp2_session* session, const nghttp2
         // Data frame received
         break;
 
+    case NGHTTP2_RST_STREAM: {
+        // HTTP/2 Rapid Reset (CVE-2023-44487) protection
+        // Track RST_STREAM frames to detect rapid reset attacks
+        auto now = std::chrono::steady_clock::now();
+        auto elapsed =
+            std::chrono::duration_cast<std::chrono::seconds>(now - self->reset_window_start_);
+
+        // Reset window if elapsed
+        if (elapsed.count() >= RESET_WINDOW_SECONDS) {
+            self->reset_count_ = 0;
+            self->reset_window_start_ = now;
+        }
+
+        // Increment reset count
+        self->reset_count_++;
+
+        std::cerr << "RST_STREAM received on stream " << frame->hd.stream_id
+                  << " (count: " << self->reset_count_ << " in " << elapsed.count() << "s)"
+                  << std::endl;
+
+        // If too many resets in window, terminate connection
+        if (self->reset_count_ > MAX_RESETS_PER_WINDOW) {
+            std::cerr << "HTTP/2 Rapid Reset attack detected: " << self->reset_count_
+                      << " resets in " << elapsed.count() << "s - terminating connection"
+                      << std::endl;
+
+            // Terminate session with ENHANCE_YOUR_CALM error code
+            nghttp2_submit_goaway(
+                session, NGHTTP2_FLAG_NONE, nghttp2_session_get_last_proc_stream_id(session),
+                NGHTTP2_ENHANCE_YOUR_CALM, reinterpret_cast<const uint8_t*>("Too many resets"), 15);
+
+            // Return error to stop processing
+            return NGHTTP2_ERR_CALLBACK_FAILURE;
+        }
+        break;
+    }
+
     default:
         break;
     }
@@ -79,10 +115,42 @@ int Http2Session::on_frame_recv_callback(nghttp2_session* session, const nghttp2
 // Stream close callback
 int Http2Session::on_stream_close_callback(nghttp2_session* session, int32_t stream_id,
                                            uint32_t error_code, void* user_data) {
-    (void)session;
-    (void)error_code;
-
     auto* self = static_cast<Http2Session*>(user_data);
+
+    // HTTP/2 Rapid Reset (CVE-2023-44487) protection
+    // Track reset frames to detect rapid reset attacks
+    if (error_code != NGHTTP2_NO_ERROR) {
+        auto now = std::chrono::steady_clock::now();
+        auto elapsed =
+            std::chrono::duration_cast<std::chrono::seconds>(now - self->reset_window_start_);
+
+        // Reset window if elapsed
+        if (elapsed.count() >= RESET_WINDOW_SECONDS) {
+            self->reset_count_ = 0;
+            self->reset_window_start_ = now;
+        }
+
+        // Increment reset count
+        self->reset_count_++;
+
+        // If too many resets in window, terminate connection
+        if (self->reset_count_ > MAX_RESETS_PER_WINDOW) {
+            std::cerr << "HTTP/2 Rapid Reset attack detected: " << self->reset_count_
+                      << " resets in " << elapsed.count() << "s - terminating connection"
+                      << std::endl;
+
+            // Terminate session with ENHANCE_YOUR_CALM error code
+            nghttp2_submit_goaway(
+                session, NGHTTP2_FLAG_NONE, nghttp2_session_get_last_proc_stream_id(session),
+                NGHTTP2_ENHANCE_YOUR_CALM, reinterpret_cast<const uint8_t*>("Too many resets"), 15);
+
+            // Clean up stream data
+            self->streams_.erase(stream_id);
+
+            // Return error to stop processing
+            return NGHTTP2_ERR_CALLBACK_FAILURE;
+        }
+    }
 
     // Clean up stream data
     self->streams_.erase(stream_id);

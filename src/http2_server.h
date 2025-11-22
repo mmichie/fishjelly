@@ -83,6 +83,12 @@ class Http2Session {
     };
 
     std::map<int32_t, StreamData> streams_;
+
+    // HTTP/2 Rapid Reset (CVE-2023-44487) protection
+    size_t reset_count_ = 0;
+    std::chrono::steady_clock::time_point reset_window_start_ = std::chrono::steady_clock::now();
+    static constexpr size_t MAX_RESETS_PER_WINDOW = 100;
+    static constexpr int RESET_WINDOW_SECONDS = 10;
 };
 
 /**

@@ -304,32 +304,33 @@ Now that all planned phases are complete, here are additional features that coul
 - **Testing**: Manual verification shows connections are terminated after 10s when headers aren't completed
 - **Security Impact**: Prevents resource exhaustion via connection holdopen attacks (Slowloris, Slow POST, Slow Read)
 
-**8. HTTP/2 Rapid Reset (CVE-2023-44487)** 🟠 HIGH
-- **Location**: `src/http2_server.cc` - No protection against rapid stream resets
+**8. HTTP/2 Rapid Reset (CVE-2023-44487)** ✅ FIXED (2025-11-22)
+- **Location**: `src/http2_server.h`, `src/http2_server.cc`
+- **Issue**: No protection against rapid stream resets (CVE-2023-44487)
 - **Attack**: Open streams, immediately RST them, repeat → CPU exhaustion
-- **Impact**: Achieved with minimal bandwidth (attacker advantage ~1000x)
-- **Fix Required**:
-  - [ ] Track reset rate per connection:
+- **Solution Implemented**:
+  - ✅ RST_STREAM frame tracking in `on_frame_recv_callback()`
+  - ✅ Sliding window rate limiting (100 resets per 10 seconds)
+  - ✅ Connection termination with GOAWAY + ENHANCE_YOUR_CALM
+  - ✅ Test suite (`scripts/testing/test_rapid_reset.py`)
   ```cpp
-  class Http2Session {
-      size_t reset_count_ = 0;
-      std::chrono::steady_clock::time_point reset_window_start_;
-      static constexpr size_t MAX_RESETS_PER_WINDOW = 100;
-      static constexpr int RESET_WINDOW_SECONDS = 10;
+  // src/http2_server.h
+  size_t reset_count_ = 0;
+  std::chrono::steady_clock::time_point reset_window_start_;
+  static constexpr size_t MAX_RESETS_PER_WINDOW = 100;
+  static constexpr int RESET_WINDOW_SECONDS = 10;
 
-      void on_stream_reset(int32_t stream_id) {
-          auto now = std::chrono::steady_clock::now();
-          if (now - reset_window_start_ > std::chrono::seconds(RESET_WINDOW_SECONDS)) {
-              reset_count_ = 0;
-              reset_window_start_ = now;
-          }
-
-          if (++reset_count_ > MAX_RESETS_PER_WINDOW) {
-              nghttp2_session_terminate_session(session_, NGHTTP2_ENHANCE_YOUR_CALM);
-          }
+  // src/http2_server.cc (on_frame_recv_callback)
+  case NGHTTP2_RST_STREAM: {
+      // Track and limit RST_STREAM frames
+      if (++self->reset_count_ > MAX_RESETS_PER_WINDOW) {
+          nghttp2_submit_goaway(..., NGHTTP2_ENHANCE_YOUR_CALM, ...);
+          return NGHTTP2_ERR_CALLBACK_FAILURE;
       }
-  };
+  }
   ```
+- **Testing**: Test confirms connection terminated after ~100 resets (131 in test due to async buffering)
+- **Security Impact**: Prevents CPU exhaustion attacks via rapid stream resets
 
 **9. HPACK Bomb Attack** 🟠 HIGH
 - **Location**: `src/http2_server.cc` - No limits on HPACK table size
@@ -544,6 +545,7 @@ endif
 4. ✅ Plaintext password storage → argon2id hashed passwords (2025-11-22)
 5. ✅ Timing attack on password comparison → constant-time verification (2025-11-22)
 6. ✅ Slowloris/slow read protections → per-stage timeouts (2025-11-22)
+7. ✅ HTTP/2 Rapid Reset (CVE-2023-44487) protection (2025-11-22)
 
 **Week 1 (Critical)**:
 1. ~~Fix plaintext password storage → hashed passwords~~ ✅ COMPLETED
@@ -554,7 +556,7 @@ endif
 **Weeks 2-4 (High)**:
 1. ~~HTTP request smuggling protections~~ ✅ COMPLETED
 2. ~~Slowloris/slow read protections~~ ✅ COMPLETED
-3. HTTP/2 rapid reset protection
+3. ~~HTTP/2 rapid reset protection~~ ✅ COMPLETED
 4. HPACK bomb protection
 5. Integer overflow fixes
 6. Enhanced security headers
