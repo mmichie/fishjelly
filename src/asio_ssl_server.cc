@@ -9,11 +9,11 @@ using namespace boost::asio::experimental::awaitable_operators;
 
 AsioSSLServer::AsioSSLServer(int port, SSLContext& ssl_context, int test_requests)
     : ssl_context_(ssl_context.get_context()),
-      acceptor_(io_context_, tcp::endpoint(tcp::v4(), port)), signals_(io_context_, SIGINT, SIGTERM),
-      port_(port), test_requests_(test_requests) {
-
+      acceptor_(io_context_, tcp::endpoint(tcp::v4(), port)),
+      signals_(io_context_, SIGINT, SIGTERM), port_(port), test_requests_(test_requests) {
     if (!ssl_context.is_configured()) {
-        throw std::runtime_error("SSL context not properly configured. Load certificate and key first.");
+        throw std::runtime_error(
+            "SSL context not properly configured. Load certificate and key first.");
     }
 
     std::cout << "Starting ASIO SSL server on port " << port_ << " process ID: " << getpid()
@@ -79,10 +79,9 @@ asio::awaitable<void> AsioSSLServer::handle_connection(ssl_socket socket) {
         asio::steady_timer handshake_timer(socket.get_executor());
         handshake_timer.expires_after(std::chrono::seconds(SSL_HANDSHAKE_TIMEOUT_SEC));
 
-        auto handshake_result =
-            co_await (socket.async_handshake(ssl::stream_base::server,
-                                             asio::as_tuple(asio::use_awaitable)) ||
-                      handshake_timer.async_wait(asio::as_tuple(asio::use_awaitable)));
+        auto handshake_result = co_await (
+            socket.async_handshake(ssl::stream_base::server, asio::as_tuple(asio::use_awaitable)) ||
+            handshake_timer.async_wait(asio::as_tuple(asio::use_awaitable)));
 
         if (handshake_result.index() == 1) {
             // Handshake timeout
@@ -117,12 +116,12 @@ asio::awaitable<void> AsioSSLServer::handle_connection(ssl_socket socket) {
 
         // Send a basic HTTPS response for testing
         std::string response = "HTTP/1.1 200 OK\r\n"
-                              "Content-Type: text/html\r\n"
-                              "Content-Length: 85\r\n"
-                              "Connection: close\r\n"
-                              "\r\n"
-                              "<html><body><h1>HTTPS Works!</h1><p>SSL/TLS connection "
-                              "established.</p></body></html>";
+                               "Content-Type: text/html\r\n"
+                               "Content-Length: 85\r\n"
+                               "Connection: close\r\n"
+                               "\r\n"
+                               "<html><body><h1>HTTPS Works!</h1><p>SSL/TLS connection "
+                               "established.</p></body></html>";
 
         co_await write_response(socket, response);
 
@@ -143,7 +142,8 @@ asio::awaitable<void> AsioSSLServer::handle_connection(ssl_socket socket) {
     }
 }
 
-asio::awaitable<std::string> AsioSSLServer::read_http_request(ssl_socket& socket, bool use_timeout) {
+asio::awaitable<std::string> AsioSSLServer::read_http_request(ssl_socket& socket,
+                                                              bool use_timeout) {
     try {
         std::string request;
         asio::streambuf buffer;
@@ -169,9 +169,8 @@ asio::awaitable<std::string> AsioSSLServer::read_http_request(ssl_socket& socket
             }
         } else {
             // No timeout for first request
-            auto [ec, bytes_transferred] =
-                co_await asio::async_read_until(socket, buffer, "\r\n\r\n",
-                                                asio::as_tuple(asio::use_awaitable));
+            auto [ec, bytes_transferred] = co_await asio::async_read_until(
+                socket, buffer, "\r\n\r\n", asio::as_tuple(asio::use_awaitable));
             if (ec || bytes_transferred == 0) {
                 co_return "";
             }
@@ -192,7 +191,8 @@ asio::awaitable<std::string> AsioSSLServer::read_http_request(ssl_socket& socket
     }
 }
 
-asio::awaitable<void> AsioSSLServer::write_response(ssl_socket& socket, const std::string& response) {
+asio::awaitable<void> AsioSSLServer::write_response(ssl_socket& socket,
+                                                    const std::string& response) {
     try {
         co_await asio::async_write(socket, asio::buffer(response), asio::use_awaitable);
     } catch (const std::exception& e) {

@@ -3,9 +3,7 @@
 #include <iostream>
 
 AsioSocketAdapter::AsioSocketAdapter(tcp::socket* asio_socket, const tcp::endpoint& client_endpoint)
-    : Socket(0) // Pass dummy port to base class
-      ,
-      asio_socket_(asio_socket) {
+    : Socket(), asio_socket_(asio_socket) {
     (void)asio_socket_; // Currently unused but kept for future use
 
     // Set up client address for logging
@@ -19,9 +17,6 @@ AsioSocketAdapter::AsioSocketAdapter(tcp::socket* asio_socket, const tcp::endpoi
         auto bytes = addr.to_bytes();
         memcpy(&client.sin_addr.s_addr, bytes.data(), 4);
     }
-
-    // Set accept_fd_ to a dummy value to indicate socket is "open"
-    accept_fd_ = 1;
 }
 
 void AsioSocketAdapter::write_line(std::string_view line) {

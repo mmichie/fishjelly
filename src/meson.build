@@ -1,6 +1,5 @@
 # Library sources (without main)
 lib_sources = files(
-  'socket.cc',
   'socket.h',
   'http.cc',
   'http.h',
@@ -97,19 +96,3 @@ executable('middleware_demo',
   install : false
 )
 
-# Build rate limiting demo
-executable('rate_limit_demo',
-  'rate_limit_demo.cc',
-  link_with : fishjelly_lib,
-  dependencies : [boost_dep, openssl_dep],
-  include_directories : inc,
-  cpp_args : [
-    '-DGIT_HASH="' + git_hash + '"',
-    '-fstack-protector-strong',
-    '-march=native',
-    '-g',
-    '-Wno-error=#warnings',
-    '-Wno-deprecated-declarations'
-  ],
-  install : false
-)

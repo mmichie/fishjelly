@@ -4,6 +4,7 @@
 #include "logging_middleware.h"
 #include "security_middleware.h"
 #include <algorithm>
+#include <arpa/inet.h>
 #include <array>
 #include <cctype>
 #include <chrono>
@@ -154,102 +155,6 @@ void Http::printConnectionType(bool keep_alive) {
         sock->write_line("Connection: keep-alive\r\n");
     else
         sock->write_line("Connection: close\r\n");
-}
-
-/**
- * Starts the web server, listening on server_port.
- */
-void Http::start(int server_port, int read_timeout, int write_timeout, int num_workers) {
-    assert(server_port > 0 && server_port <= 65535);
-
-    sock = std::make_unique<Socket>(server_port);
-
-    // Configure timeouts
-    sock->set_read_timeout(read_timeout);
-    sock->set_write_timeout(write_timeout);
-
-    // Use worker pool if num_workers > 0, otherwise use traditional fork model
-    if (num_workers > 0) {
-        // Pre-fork worker pool model
-        if (DEBUG) {
-            std::cout << "Starting worker pool with " << num_workers << " workers" << std::endl;
-        }
-
-        // Create worker processes
-        for (int i = 0; i < num_workers; i++) {
-            pid_t pid = fork();
-            if (pid < 0) {
-                perror("Fork worker");
-                cleanup_workers();
-                exit(1);
-            } else if (pid == 0) {
-                // Worker process
-                worker_loop();
-                exit(0);
-            } else {
-                // Parent: track worker PID
-                worker_pids_.push_back(pid);
-                if (DEBUG) {
-                    std::cout << "Created worker " << i << " with PID " << pid << std::endl;
-                }
-            }
-        }
-
-        // Parent monitors and manages workers
-        monitor_workers();
-    } else {
-        // Traditional fork-per-connection model
-        bool keep_alive = false;
-        int pid;
-
-        // Loop to handle clients
-        while (1) {
-            sock->accept_client();
-
-            pid = fork();
-            if (pid < 0) {
-                perror("Fork");
-                exit(1);
-            }
-
-            /* Child */
-            if (pid == 0) {
-                // First request doesn't use timeout
-                std::string header_str = getHeader(false);
-                keep_alive = parseHeader(header_str);
-                while (keep_alive) {
-                    // Subsequent requests use timeout for keep-alive
-                    std::string header = getHeader(true);
-                    if (header.empty()) {
-                        // Timeout or connection closed
-                        break;
-                    }
-                    keep_alive = parseHeader(header);
-                }
-
-                sock->close_socket();
-                exit(0);
-            }
-
-            /* Parent */
-            else {
-                sock->close_client(); // Only close client connection, not server socket
-                request_count++;
-
-                // Exit after N requests in test mode
-                if (test_requests > 0 && request_count >= test_requests) {
-                    std::cout << "Test mode: Exiting after " << request_count << " requests"
-                              << std::endl;
-                    break;
-                }
-            }
-        }
-
-        // Print completion message for test mode
-        if (test_requests > 0) {
-            std::cout << "Server shutdown complete." << std::endl;
-        }
-    }
 }
 
 std::string Http::sanitizeFilename(std::string_view filename) {
@@ -673,16 +578,11 @@ void Http::processPostRequest(const std::map<std::string, std::string>& headerma
                               << ", Read: " << bytes_read << std::endl;
                 }
                 if (sock) {
-                    // Check if the error was a timeout
-                    if (bytes_read < 0 && sock->is_timeout_error()) {
-                        sendHeader(408, 0, "text/html", false);
-                        sock->write_line("<html><body>408 Request Timeout - Client too "
-                                         "slow sending body</body></html>");
-                    } else {
-                        sendHeader(400, 0, "text/html", keep_alive);
-                        sock->write_line(
-                            "<html><body>400 Bad Request - Incomplete POST body</body></html>");
-                    }
+                    // Treat all read failures as bad requests
+                    // (Timeouts are handled at the ASIO connection level)
+                    sendHeader(400, 0, "text/html", keep_alive);
+                    sock->write_line(
+                        "<html><body>400 Bad Request - Incomplete POST body</body></html>");
                 }
                 return;
             }
@@ -838,14 +738,10 @@ void Http::processPutRequest(const std::map<std::string, std::string>& headermap
             std::vector<char> buffer(content_length);
             ssize_t bytes_read = sock->read_raw(buffer.data(), content_length);
             if (bytes_read < content_length) {
-                // Check if the error was a timeout
-                if (bytes_read < 0 && sock->is_timeout_error()) {
-                    sendHeader(408, 0, "text/plain", false);
-                    sock->write_line("408 Request Timeout - Client too slow sending body\n");
-                } else {
-                    sendHeader(400, 0, "text/plain", keep_alive);
-                    sock->write_line("400 Bad Request - Incomplete body\n");
-                }
+                // Treat all read failures as bad requests
+                // (Timeouts are handled at the ASIO connection level)
+                sendHeader(400, 0, "text/plain", keep_alive);
+                sock->write_line("400 Bad Request - Incomplete body\n");
                 return;
             }
             body = std::string(buffer.data(), content_length);
@@ -1726,10 +1622,11 @@ void Http::processGetRequest(const std::map<std::string, std::string>& headermap
     auto size = file.tellg();
     file.seekg(0, std::ios::beg);
 
+    // CGI support disabled - requires fork-based socket with file descriptor
+    // The ASIO-based architecture doesn't expose raw file descriptors
     if (file_extension == ".sh") {
-        Cgi cgi;
-        cgi.executeCGI(filename, sock->accept_fd_, headermap);
-        sock->close_socket();
+        sendHeader(501, 0, "text/plain", keep_alive);
+        sock->write_line("501 Not Implemented - CGI support not available in ASIO mode\n");
         return;
     }
 
@@ -1818,16 +1715,12 @@ std::string Http::getHeader(bool use_timeout) {
     std::string clientBuffer;
     std::string line;
 
-    // For keep-alive connections, use a timeout
-    const int KEEPALIVE_TIMEOUT = 5; // 5 seconds timeout
+    // Timeouts are handled at the ASIO connection level
+    // (use_timeout parameter is ignored in ASIO mode)
+    (void)use_timeout;
 
     // Read headers line by line until we get an empty line
-    bool read_success;
-    if (use_timeout) {
-        read_success = sock->read_line_with_timeout(&line, KEEPALIVE_TIMEOUT);
-    } else {
-        read_success = sock->read_line(&line);
-    }
+    bool read_success = sock->read_line(&line);
 
     while (read_success) {
         if (DEBUG) {
@@ -1847,11 +1740,7 @@ std::string Http::getHeader(bool use_timeout) {
         }
 
         line.clear();
-        if (use_timeout) {
-            read_success = sock->read_line_with_timeout(&line, KEEPALIVE_TIMEOUT);
-        } else {
-            read_success = sock->read_line(&line);
-        }
+        read_success = sock->read_line(&line);
     }
 
     return clientBuffer;
@@ -2501,94 +2390,4 @@ void Http::sendMultipartRanges(std::string_view filename, const std::vector<Byte
         sock->write_line(headerStream.str());
         sock->write_raw(body_str.data(), body_str.length());
     }
-}
-
-/**
- * Worker loop - handles connections in worker process
- */
-void Http::worker_loop() {
-    int requests_handled = 0;
-    bool keep_alive = false;
-
-    if (DEBUG) {
-        std::cout << "Worker " << getpid() << " started" << std::endl;
-    }
-
-    while (requests_handled < max_requests_per_worker_) {
-        // Accept connection (workers compete for this - kernel handles locking)
-        sock->accept_client();
-
-        if (DEBUG) {
-            std::cout << "Worker " << getpid() << " accepted connection" << std::endl;
-        }
-
-        // Handle keep-alive loop
-        keep_alive = parseHeader(getHeader(false));
-        requests_handled++;
-
-        while (keep_alive && requests_handled < max_requests_per_worker_) {
-            std::string header = getHeader(true);
-            if (header.empty()) {
-                break;
-            }
-            keep_alive = parseHeader(header);
-            requests_handled++;
-        }
-
-        sock->close_client();
-    }
-
-    if (DEBUG) {
-        std::cout << "Worker " << getpid() << " exiting after " << requests_handled << " requests"
-                  << std::endl;
-    }
-}
-
-/**
- * Monitor and manage worker processes
- */
-void Http::monitor_workers() {
-    while (true) {
-        int status;
-        pid_t pid = wait(&status);
-
-        if (pid > 0) {
-            if (DEBUG) {
-                std::cout << "Worker " << pid << " exited with status " << status << std::endl;
-            }
-
-            // Spawn replacement worker
-            pid_t new_pid = fork();
-            if (new_pid < 0) {
-                perror("Fork replacement worker");
-                continue;
-            } else if (new_pid == 0) {
-                // New worker process
-                worker_loop();
-                exit(0);
-            } else {
-                // Parent: replace PID in tracking vector
-                for (auto& wpid : worker_pids_) {
-                    if (wpid == pid) {
-                        wpid = new_pid;
-                        if (DEBUG) {
-                            std::cout << "Replaced worker " << pid << " with " << new_pid
-                                      << std::endl;
-                        }
-                        break;
-                    }
-                }
-            }
-        }
-    }
-}
-
-/**
- * Cleanup all worker processes
- */
-void Http::cleanup_workers() {
-    for (pid_t pid : worker_pids_) {
-        kill(pid, SIGTERM);
-    }
-    worker_pids_.clear();
 }

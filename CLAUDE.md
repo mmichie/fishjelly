@@ -34,27 +34,34 @@ meson compile
 
 ## Architecture Overview
 
-Fishjelly is a lightweight HTTP web server written in C++17 using a traditional Unix fork-per-connection model. The codebase follows object-oriented design principles with clear separation of concerns.
+Fishjelly is a lightweight HTTP web server written in C++23 using Boost.ASIO for async I/O with coroutines. The codebase follows object-oriented design principles with clear separation of concerns.
 
 ### Core Components
 
-1. **Http (http.h/cc)**: Central HTTP protocol handler that processes GET, HEAD, and POST requests. This is the main integration point that coordinates all other components.
+1. **Http (http.h/cc)**: Central HTTP protocol handler that processes GET, HEAD, POST, PUT, DELETE, and OPTIONS requests. Coordinates all other components for request processing.
 
-2. **Socket (socket.h/cc)**: Manages TCP socket operations including server binding, client connections, and network I/O. Implements the fork-based concurrent connection model.
+2. **Socket (socket.h)**: Abstract interface defining socket operations (read_line, write_line, read_raw, write_raw). Implemented by AsioSocketAdapter for ASIO-based connections.
 
-3. **Webserver (webserver.h/cc)**: Application entry point handling command-line parsing, daemon mode, signal management (SIGCHLD, SIGINT), and PID file operations.
+3. **AsioServer / AsioSSLServer (asio_server.h/cc, asio_ssl_server.h/cc)**: ASIO-based async servers using C++20 coroutines. Handle HTTP and HTTPS connections respectively with async I/O and connection management.
+
+4. **AsioSocketAdapter (asio_socket_adapter.h/cc)**: Adapts ASIO sockets to the Socket interface, providing buffered I/O for HTTP protocol handling.
+
+5. **Webserver (webserver.h/cc)**: Application entry point handling command-line parsing, daemon mode, signal management (SIGINT), and PID file operations.
 
 ### Component Relationships
 
-- `Webserver` creates and manages the main `Socket` instance
-- `Socket` accepts connections and forks child processes
-- Each child process creates an `Http` instance to handle the request
+- `Webserver` creates either `AsioServer` or `AsioSSLServer` based on SSL option
+- Server accepts connections and spawns coroutines to handle each request
+- Each connection creates an `AsioSocketAdapter` implementing the `Socket` interface
+- `Http` instance processes requests using the `Socket` interface
 - `Http` uses:
   - `Mime` for content type detection
-  - `CGI` for script execution
   - `Log` for access logging
   - `Filter` for content modification
   - `Token` for parsing headers
+  - `Auth` for authentication (Basic and Digest)
+  - `ContentNegotiator` for content type negotiation
+  - Middleware chain for request/response processing
 
 ### Runtime Structure
 
@@ -62,15 +69,17 @@ The server operates from the `base/` directory which contains:
 - `htdocs/`: Web root for static files
 - `logs/`: Access log location
 - `mime.types`: MIME type configuration
+- `ssl/`: SSL certificates and keys (for HTTPS mode)
 - `fishjelly.pid`: PID file when running as daemon
 
 ### Key Design Patterns
 
-- Fork-per-connection for concurrency (no threading)
-- Signal handling for proper child process cleanup
+- Async I/O with C++20 coroutines (awaitable/co_await)
+- Abstract Socket interface for protocol handling
+- Middleware chain pattern for request/response processing
+- SSL/TLS support with modern cipher suites (TLS 1.2/1.3)
 - File-based configuration (mime.types)
 - Apache-style access logging
-- Traditional CGI support with environment variable setup
 
 ## Development Notes
 
@@ -81,10 +90,16 @@ The server operates from the `base/` directory which contains:
 - C++23 standard with optimization flags
 - Code formatting: 4-space indentation (see .clang-format)
 - Modern C++ features:
-  - `std::unique_ptr` for Socket ownership
+  - C++20 coroutines (`co_await`, `asio::awaitable`)
+  - `std::unique_ptr` and `std::shared_ptr` for ownership
   - `std::string_view` for read-only string parameters
   - `std::filesystem` for path operations
   - `std::vector` for dynamic buffers
   - `std::format` for string formatting (C++23)
   - Range-based for loops
   - Structured bindings
+- Boost.ASIO for async networking:
+  - TCP socket operations
+  - SSL/TLS streams
+  - Coroutine-based async I/O
+  - Timer-based connection management

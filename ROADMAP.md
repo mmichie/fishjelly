@@ -72,11 +72,13 @@
 
 ## Architecture Notes
 
-### Dual Architecture Support
-- Fork-based (default): Simple, battle-tested, compatible
-- ASIO Coroutines (--asio flag): Modern, scalable, async
+### ASIO-Only Architecture (Implemented)
+- Modern async I/O using Boost.ASIO with C++20 coroutines
+- Scalable connection handling without fork overhead
+- Native SSL/TLS support via ASIO SSL streams
+- **Fork-based model removed** (as of 2025-11-21)
 
-### ASIO Architecture (Implemented)
+### ASIO Architecture
 ```cpp
 asio::awaitable<void> handle_request(tcp::socket socket) {
     // Clean, linear async code
@@ -86,12 +88,13 @@ asio::awaitable<void> handle_request(tcp::socket socket) {
 }
 ```
 
-### Implementation Approach (Completed)
+### Migration Complete
 1. ✓ Added ASIO alongside existing code
-2. ✓ Created AsioServer class with coroutines
-3. ✓ Both models coexist for flexibility
-4. Fork-based code retained for compatibility
-5. ASIO features available when using --asio mode
+2. ✓ Created AsioServer and AsioSSLServer classes with coroutines
+3. ✓ Removed fork-based Socket implementation
+4. ✓ Converted Socket to pure abstract interface
+5. ✓ Simplified codebase to ASIO-only model
+6. ✓ CGI support disabled (incompatible with ASIO architecture)
 
 ## Testing
 - HTTP/1.1 compliance test suite exists (`scripts/testing/test_http11_compliance.py`)

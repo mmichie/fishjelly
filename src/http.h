@@ -3,10 +3,8 @@
 
 #include <map>
 #include <memory>
-#include <signal.h>
 #include <string>
 #include <string_view>
-#include <sys/wait.h>
 #include <vector>
 
 #include "global.h"
@@ -79,15 +77,6 @@ class Http {
                              const std::map<std::string, std::string>& headermap, bool keep_alive);
 
     std::string lastHeader; // Store last sent header for testing
-    int test_requests = 0;  // Exit after N requests (0 = run forever)
-    int request_count = 0;  // Current request count
-
-    // Worker pool management
-    std::vector<pid_t> worker_pids_;
-    int max_requests_per_worker_ = 1000; // Worker restarts after this many requests
-    void worker_loop();
-    void monitor_workers();
-    void cleanup_workers();
 
     // Middleware chain
     std::unique_ptr<MiddlewareChain> middleware_chain;
@@ -102,12 +91,6 @@ class Http {
     Auth auth;
 
     // Rate limiting
-    // Note: In fork-per-connection mode, each child process has its own rate_limit_map_,
-    // so rate limiting is less effective for parallel requests from the same IP.
-    // Rate limiting works best with:
-    // 1. Sequential requests (typical browser behavior)
-    // 2. Worker pool mode where workers share state within a process
-    // For distributed/shared rate limiting, consider using Redis or similar
     struct RateLimitInfo {
         std::vector<time_t> request_times;
         time_t blocked_until = 0; // Time when client will be unblocked
@@ -134,10 +117,7 @@ class Http {
     void sendRedirect(int code, const std::string& location, bool keep_alive = false);
     void sendOptionsHeader(bool keep_alive = false);
     std::string getHeader(bool use_timeout = false);
-    void start(int server_port, int read_timeout = 30, int write_timeout = 30, int num_workers = 0);
     bool parseHeader(std::string_view header);
-    void setTestMode(int requests) { test_requests = requests; }
-    void setMaxRequestsPerWorker(int max_requests) { max_requests_per_worker_ = max_requests; }
 
     // Middleware configuration
     void setMiddlewareChain(std::unique_ptr<MiddlewareChain> chain) {

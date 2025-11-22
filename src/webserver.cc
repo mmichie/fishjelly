@@ -85,17 +85,6 @@ bool createPidFile(const std::string& filename, int pid) {
 }
 
 /**
- * Signal handler for cleaning up child processes.
- * @param sigNo The signal number.
- */
-void reapChildren(int sigNo) {
-    (void)sigNo; // Suppress unused parameter warning
-
-    while (waitpid(-1, nullptr, WNOHANG) > 0)
-        ;
-}
-
-/**
  * Signal handler for handling interrupt signals like Ctrl+C.
  * @param sigNo The signal number.
  */
@@ -110,19 +99,13 @@ void controlBreak(int sigNo) {
  * Parses command line options using argparse.
  */
 struct CommandLineArgs {
-    int port;
-    bool daemon;
-    int test_requests;           // Exit after N requests (0 = run forever)
-    bool use_asio;               // Use ASIO instead of fork model
-    int read_timeout;            // Read timeout in seconds
-    int write_timeout;           // Write timeout in seconds
-    int workers;                 // Number of worker processes (0 = traditional fork model)
-    int max_requests_per_worker; // Max requests per worker before restart
-    bool use_ssl;                // Enable SSL/TLS (requires --asio)
-    int ssl_port;                // SSL port (default: 443)
-    std::string ssl_cert;        // Path to SSL certificate
-    std::string ssl_key;         // Path to SSL private key
-    std::string ssl_dh;          // Path to DH parameters (optional)
+    int port;             // HTTP port
+    bool daemon;          // Run as daemon
+    bool use_ssl;         // Enable SSL/TLS
+    int ssl_port;         // HTTPS port (default: 443)
+    std::string ssl_cert; // Path to SSL certificate
+    std::string ssl_key;  // Path to SSL private key
+    std::string ssl_dh;   // Path to DH parameters (optional)
 };
 
 CommandLineArgs parseCommandLineOptions(int argc, char* argv[]) {
@@ -142,45 +125,7 @@ CommandLineArgs parseCommandLineOptions(int argc, char* argv[]) {
         .default_value(false)
         .implicit_value(true);
 
-    program.add_argument("-t", "--test")
-        .help("test mode: exit after N requests")
-        .default_value(0)
-        .scan<'i', int>()
-        .metavar("N");
-
-    program.add_argument("-a", "--asio")
-        .help("use ASIO coroutines instead of fork model")
-        .default_value(false)
-        .implicit_value(true);
-
-    program.add_argument("--read-timeout")
-        .help("read timeout in seconds (0 = no timeout)")
-        .default_value(30)
-        .scan<'i', int>()
-        .metavar("SECONDS");
-
-    program.add_argument("--write-timeout")
-        .help("write timeout in seconds (0 = no timeout)")
-        .default_value(30)
-        .scan<'i', int>()
-        .metavar("SECONDS");
-
-    program.add_argument("--workers")
-        .help("number of worker processes for connection pooling (0 = traditional fork model)")
-        .default_value(0)
-        .scan<'i', int>()
-        .metavar("N");
-
-    program.add_argument("--max-requests-per-worker")
-        .help("maximum requests per worker before restart (prevents memory leaks)")
-        .default_value(1000)
-        .scan<'i', int>()
-        .metavar("N");
-
-    program.add_argument("--ssl")
-        .help("enable SSL/TLS (requires --asio)")
-        .default_value(false)
-        .implicit_value(true);
+    program.add_argument("--ssl").help("enable SSL/TLS").default_value(false).implicit_value(true);
 
     program.add_argument("--ssl-port")
         .help("SSL port to listen on")
@@ -215,12 +160,6 @@ CommandLineArgs parseCommandLineOptions(int argc, char* argv[]) {
 
     return {.port = program.get<int>("--port"),
             .daemon = program.get<bool>("--daemon"),
-            .test_requests = program.get<int>("--test"),
-            .use_asio = program.get<bool>("--asio"),
-            .read_timeout = program.get<int>("--read-timeout"),
-            .write_timeout = program.get<int>("--write-timeout"),
-            .workers = program.get<int>("--workers"),
-            .max_requests_per_worker = program.get<int>("--max-requests-per-worker"),
             .use_ssl = program.get<bool>("--ssl"),
             .ssl_port = program.get<int>("--ssl-port"),
             .ssl_cert = program.get<std::string>("--ssl-cert"),
@@ -232,8 +171,7 @@ CommandLineArgs parseCommandLineOptions(int argc, char* argv[]) {
  * Sets up the signal handlers for the program.
  */
 void setupSignals() {
-    if (std::signal(SIGCHLD, reapChildren) == SIG_ERR ||
-        std::signal(SIGINT, controlBreak) == SIG_ERR) {
+    if (std::signal(SIGINT, controlBreak) == SIG_ERR) {
         fatalError("Problem setting signals");
     }
 }
@@ -274,43 +212,30 @@ int main(int argc, char* argv[]) {
 
     createPidFile("fishjelly.pid", pid);
 
-    if (args.use_asio) {
-        if (args.use_ssl) {
-            // Use ASIO SSL server
-            try {
-                SSLContext ssl_context;
-                ssl_context.load_certificate(args.ssl_cert);
-                ssl_context.load_private_key(args.ssl_key);
+    if (args.use_ssl) {
+        // HTTPS server (ASIO SSL)
+        try {
+            SSLContext ssl_context;
+            ssl_context.load_certificate(args.ssl_cert);
+            ssl_context.load_private_key(args.ssl_key);
 
-                // Load DH parameters if file exists
-                if (std::filesystem::exists(args.ssl_dh)) {
-                    ssl_context.load_dh_params(args.ssl_dh);
-                }
-
-                AsioSSLServer server(args.ssl_port, ssl_context, args.test_requests);
-                server.run();
-            } catch (const std::exception& e) {
-                std::cerr << "SSL Error: " << e.what() << std::endl;
-                std::cerr << "\nTo generate test certificates, run:" << std::endl;
-                std::cerr << "  scripts/generate-ssl-cert.sh" << std::endl;
-                return 1;
+            // Load DH parameters if file exists
+            if (std::filesystem::exists(args.ssl_dh)) {
+                ssl_context.load_dh_params(args.ssl_dh);
             }
-        } else {
-            // Use ASIO-based server (HTTP)
-            AsioServer server(args.port, args.test_requests);
+
+            AsioSSLServer server(args.ssl_port, ssl_context);
             server.run();
-        }
-    } else {
-        if (args.use_ssl) {
-            std::cerr << "Error: SSL/TLS requires --asio flag" << std::endl;
-            std::cerr << "Usage: shelob --asio --ssl --ssl-port 8443" << std::endl;
+        } catch (const std::exception& e) {
+            std::cerr << "SSL Error: " << e.what() << std::endl;
+            std::cerr << "\nTo generate test certificates, run:" << std::endl;
+            std::cerr << "  scripts/generate-ssl-cert.sh" << std::endl;
             return 1;
         }
-        // Use traditional fork-based server
-        Http webserver;
-        webserver.setTestMode(args.test_requests);
-        webserver.setMaxRequestsPerWorker(args.max_requests_per_worker);
-        webserver.start(args.port, args.read_timeout, args.write_timeout, args.workers);
+    } else {
+        // HTTP server (ASIO)
+        AsioServer server(args.port);
+        server.run();
     }
 
     return 0;

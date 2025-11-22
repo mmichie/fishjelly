@@ -1,66 +1,60 @@
 #ifndef SHELOB_SOCKET_H
 #define SHELOB_SOCKET_H 1
 
-#include <cerrno>
 #include <cstdio>
-#include <iostream>
 #include <string>
+#include <string_view>
 
-#include <arpa/inet.h>
 #include <netinet/in.h>
-#include <sys/socket.h>
-#include <sys/types.h>
 
-#include "global.h"
-
+/**
+ * Socket interface for HTTP I/O operations
+ * This is a pure abstract base class implemented by AsioSocketAdapter
+ */
 class Socket {
-  private:
-    int socket_fd_{-1}, sin_size_;
-    struct sockaddr_in server_;
-    static constexpr int NUM_CLIENTS_TO_QUEUE = 10;
-    void server_bind(int server_port);
-    FILE* socket_fp_{nullptr};
-
-    // Timeout values in seconds
-    int read_timeout_{30};  // Default 30 seconds for reads
-    int write_timeout_{30}; // Default 30 seconds for writes
-
   public:
-    int accept_fd_{-1}, pid_;
-
+    // Client information (set by implementations)
     struct sockaddr_in client;
 
-    void accept_client();
-    virtual bool read_line(std::string* buffer);
-    bool read_line_with_timeout(std::string* buffer, int timeout_seconds);
-    virtual ssize_t read_raw(char* buffer, size_t size); // Returns bytes read or -1 on error
-    virtual void write_line(std::string_view line);
-    virtual int write_raw(const char* data, size_t size); // Returns bytes written or -1 on error
-    void handle_error(std::string_view message);
-    void set_socket_options();
-    void bind_socket(int server_port);
-
-    // Timeout configuration
-    void set_read_timeout(int seconds);
-    void set_write_timeout(int seconds);
-    void apply_timeouts(); // Apply timeouts to the accepted connection
-
-    // Check if last error was a timeout
-    bool is_timeout_error() const;
-
-    void close_socket();
-    void close_client(); // Close only the client connection
-
-    // Constructor
-    explicit Socket(int server_port) : socket_fd_{-1}, socket_fp_{nullptr}, accept_fd_{-1} {
-        // Bind the port
-        if (server_port > 0) {
-            server_bind(server_port);
-        }
-    }
-
-    // Virtual destructor
+    /**
+     * Virtual destructor for proper cleanup
+     */
     virtual ~Socket() = default;
+
+    /**
+     * Read a line from the socket
+     * @param buffer Pointer to string buffer for the line
+     * @return true if successful, false on error/EOF
+     */
+    virtual bool read_line(std::string* buffer) = 0;
+
+    /**
+     * Read raw bytes from the socket
+     * @param buffer Buffer to store the data
+     * @param size Number of bytes to read
+     * @return Number of bytes read, or -1 on error
+     */
+    virtual ssize_t read_raw(char* buffer, size_t size) = 0;
+
+    /**
+     * Write a line to the socket
+     * @param line String view of data to write
+     */
+    virtual void write_line(std::string_view line) = 0;
+
+    /**
+     * Write raw bytes to the socket
+     * @param data Pointer to data to write
+     * @param size Number of bytes to write
+     * @return Number of bytes written, or -1 on error
+     */
+    virtual int write_raw(const char* data, size_t size) = 0;
+
+  protected:
+    /**
+     * Protected constructor - only implementations can instantiate
+     */
+    Socket() = default;
 };
 
 #endif /* !SHELOB_SOCKET_H */
