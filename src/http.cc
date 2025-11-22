@@ -384,6 +384,24 @@ bool Http::parseHeader(std::string_view header) {
                 value.pop_back();
             }
 
+            // SECURITY: Detect duplicate Content-Length or Transfer-Encoding headers
+            // to prevent HTTP request smuggling attacks (CWE-444)
+            if (name == "Content-Length" || name == "Transfer-Encoding") {
+                if (headermap.find(name) != headermap.end()) {
+                    // Duplicate header detected - this is a smuggling attempt
+                    if (DEBUG) {
+                        std::cout << "SECURITY: Duplicate " << name << " header detected. "
+                                  << "Rejecting request to prevent smuggling attack." << std::endl;
+                    }
+                    if (sock) {
+                        sendHeader(400, 0, "text/html", false);
+                        sock->write_line("<html><body>400 Bad Request - Duplicate " + name +
+                                         " header</body></html>");
+                    }
+                    return false;
+                }
+            }
+
             headermap[name] = value;
         }
     }
@@ -397,6 +415,46 @@ bool Http::parseHeader(std::string_view header) {
             if (key != method) { // Don't print method as header
                 std::cout << "  " << key << ": " << value << std::endl;
             }
+        }
+    }
+
+    // SECURITY: Reject requests with both Content-Length and Transfer-Encoding
+    // This prevents CL.TE and TE.CL request smuggling attacks
+    if (headermap.find("Content-Length") != headermap.end() &&
+        headermap.find("Transfer-Encoding") != headermap.end()) {
+        if (DEBUG) {
+            std::cout << "SECURITY: Request has both Content-Length and Transfer-Encoding headers. "
+                      << "Rejecting to prevent smuggling attack." << std::endl;
+        }
+        if (sock) {
+            sendHeader(400, 0, "text/html", false);
+            sock->write_line(
+                "<html><body>400 Bad Request - Content-Length and Transfer-Encoding are "
+                "mutually exclusive</body></html>");
+        }
+        return false;
+    }
+
+    // SECURITY: Validate Transfer-Encoding value is strictly "chunked"
+    // Reject malformed values like "chunked, identity" or "identity, chunked" that can cause
+    // smuggling
+    auto te_it = headermap.find("Transfer-Encoding");
+    if (te_it != headermap.end()) {
+        std::string te_value = te_it->second;
+        // Normalize whitespace for comparison
+        te_value.erase(std::remove_if(te_value.begin(), te_value.end(), ::isspace), te_value.end());
+
+        if (te_value != "chunked") {
+            if (DEBUG) {
+                std::cout << "SECURITY: Invalid Transfer-Encoding value: '" << te_it->second
+                          << "'. Only 'chunked' is supported." << std::endl;
+            }
+            if (sock) {
+                sendHeader(400, 0, "text/html", false);
+                sock->write_line("<html><body>400 Bad Request - Invalid Transfer-Encoding value. "
+                                 "Only 'chunked' is supported.</body></html>");
+            }
+            return false;
         }
     }
 
