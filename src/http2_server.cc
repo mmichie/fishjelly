@@ -4,6 +4,7 @@
 
 #include "log.h"
 #include "mime.h"
+#include "security_middleware.h"
 #include <boost/asio/use_awaitable.hpp>
 #include <cstring>
 #include <filesystem>
@@ -165,12 +166,6 @@ void Http2Session::process_request(int32_t stream_id) {
 
     const auto& stream = it->second;
 
-    // Security: prevent directory traversal
-    if (stream.path.find("..") != std::string::npos) {
-        send_error(stream_id, 403, "Forbidden");
-        return;
-    }
-
     std::string path = stream.path;
 
     // Default to index.html for directory requests
@@ -178,8 +173,14 @@ void Http2Session::process_request(int32_t stream_id) {
         path = "/index.html";
     }
 
-    // Build file path (relative to htdocs/)
-    std::string file_path = "htdocs" + path;
+    // Security: Sanitize path to prevent directory traversal
+    // This handles URL encoding, null bytes, and ensures path stays within htdocs
+    std::string file_path =
+        SecurityMiddleware::sanitize_path(path, std::filesystem::path("htdocs"));
+    if (file_path.empty()) {
+        send_error(stream_id, 400, "Bad Request - Invalid Path");
+        return;
+    }
 
     // Check if file exists
     if (!std::filesystem::exists(file_path)) {

@@ -22,6 +22,9 @@ struct RequestContext {
     std::map<std::string, std::string> headers;
     std::string body;
 
+    // Security-sanitized file path (set by SecurityMiddleware)
+    std::string sanitized_file_path;
+
     // Response details (can be modified by middleware)
     int status_code = 200;
     std::map<std::string, std::string> response_headers;

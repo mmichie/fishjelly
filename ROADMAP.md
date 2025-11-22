@@ -148,12 +148,464 @@ Fishjelly now offers a complete, modern HTTP/1.1 and HTTP/2 web server with ente
 
 Now that all planned phases are complete, here are additional features that could be considered for future development:
 
-### Security & Performance Enhancements
-- [ ] **Request Size Limits** - Prevent memory exhaustion attacks
-- [ ] **Connection Limits** - Max connections per IP
-- [ ] **IP-based Access Control** - Allow/deny rules by IP
+### Security Hardening (Comprehensive Threat Analysis - 2025-11-22)
+
+**Executive Summary**: While Fishjelly uses modern C++23, ASIO, and smart pointers (reducing many classic vulnerabilities), it has critical security gaps that require attention before production deployment against hostile threats. Path traversal vulnerabilities have been fixed (2025-11-22) with comprehensive URL decoding and canonical path validation.
+
+#### PHASE 1: CRITICAL VULNERABILITIES (Immediate Action Required)
+
+**1. Plaintext Password Storage** 🔴 CRITICAL
+- **Location**: `src/auth.cc:276-277`, `src/auth.cc:421-464`, `src/http.cc:26-29`
+- **Issue**: Passwords stored in plaintext both in memory and on disk
+- **Current Code**:
+  ```cpp
+  auth.add_user("admin", "secret123");  // Hardcoded plaintext
+  // File format: username:password (plaintext)
+  ```
+- **Impact**: Complete authentication bypass via memory dump, config file access, or process inspection
+- **Fix Required**:
+  - [ ] Replace plaintext storage with argon2id or bcrypt hashing
+  - [ ] Implement salted password hashing (unique salt per user)
+  - [ ] Use constant-time comparison for password verification
+  - [ ] Secure credential file with 0600 permissions
+  - [ ] Add password strength requirements
+  ```cpp
+  // Use libsodium or Botan for secure hashing
+  std::string hash_password(const std::string& password) {
+      unsigned char salt[crypto_pwhash_SALTBYTES];
+      randombytes_buf(salt, sizeof salt);
+      unsigned char hash[crypto_pwhash_STRBYTES];
+      crypto_pwhash_str(hash, password.c_str(), password.length(),
+                       crypto_pwhash_OPSLIMIT_INTERACTIVE,
+                       crypto_pwhash_MEMLIMIT_INTERACTIVE);
+      return std::string(reinterpret_cast<char*>(hash));
+  }
+  ```
+
+**2. Timing Attack on Password Comparison** 🔴 CRITICAL
+- **Location**: `src/auth.cc:348`
+- **Issue**: String equality operator leaks password length and content via timing
+- **Current Code**: `return user_it->second == password_it->second;`
+- **Attack**: Password extracted character-by-character via timing oracle
+- **Fix Required**:
+  - [ ] Implement constant-time comparison
+  ```cpp
+  bool constant_time_compare(const std::string& a, const std::string& b) {
+      if (a.size() != b.size()) return false;
+      volatile unsigned char result = 0;
+      for (size_t i = 0; i < a.size(); i++) {
+          result |= a[i] ^ b[i];
+      }
+      return result == 0;
+  }
+  ```
+
+**3. Weak Cryptographic Primitives (MD5)** 🔴 CRITICAL
+- **Location**: `src/auth.cc:89-98`, `src/auth.cc:412`
+- **Issue**: MD5 is cryptographically broken (collision attacks since 2004)
+- **Impact**: Digest authentication vulnerable to rainbow tables and collisions
+- **Fix Required**:
+  - [ ] Replace MD5 with SHA-256 or SHA-3 for all hashing
+  - [ ] Add salt to all hash operations
+  - [ ] Consider deprecating Digest auth in favor of modern OAuth2/JWT
+  - [ ] Update to RFC 7616 (Digest with SHA-256)
+
+**4. No Request Size Limits** 🔴 CRITICAL
+- **Location**: Throughout `src/http.cc`, `src/http2_server.cc`
+- **Issue**: Unlimited header/body/upload sizes enable memory exhaustion DoS
+- **Attack Examples**:
+  ```bash
+  # Exhaust memory with giant headers
+  curl -H "X-Evil: $(python3 -c 'print("A"*1000000000)')" http://target/
+
+  # HTTP/2 stream flooding
+  # Open 10,000 concurrent streams requesting 1GB files each
+  ```
+- **Fix Required**:
+  - [ ] Add size limits to http.h:
+  ```cpp
+  static constexpr size_t MAX_HEADER_SIZE = 8192;        // 8KB
+  static constexpr size_t MAX_BODY_SIZE = 10485760;      // 10MB
+  static constexpr size_t MAX_REQUEST_LINE = 8192;       // 8KB
+  static constexpr size_t MAX_UPLOAD_SIZE = 104857600;   // 100MB
+  static constexpr size_t MAX_HEADERS_COUNT = 100;       // Max header fields
+  ```
+  - [ ] Add HTTP/2 specific limits:
+  ```cpp
+  static constexpr int MAX_STREAMS_PER_CONN = 100;
+  static constexpr size_t MAX_FRAME_SIZE = 16384;        // Per RFC 7540
+  static constexpr size_t MAX_HEADER_LIST_SIZE = 16384;
+  ```
+  - [ ] Enforce limits during parsing with early termination
+  - [ ] Return 413 Payload Too Large when exceeded
+
+**5. Path Traversal Vulnerabilities** ✅ FIXED
+- **Location**: `src/security_middleware.cc`, `src/http2_server.cc`
+- **Issue**: Path traversal vulnerabilities via URL encoding, double encoding, null bytes, and other bypasses
+- **Solution Implemented**:
+  - ✅ Recursive URL decoding to handle multiple encoding levels
+  - ✅ Null byte filtering
+  - ✅ Filesystem canonical path resolution with containment validation
+  - ✅ Backslash filtering (Windows-style paths)
+  - ✅ Multiple slash normalization
+  - ✅ Comprehensive path validation using `std::filesystem::weakly_canonical()`
+- **Security Tests**: All critical path traversal attacks blocked:
+  - ✅ Basic traversal (`../../../etc/passwd`)
+  - ✅ URL encoded (`..%2f..%2fetc/passwd`)
+  - ✅ Double encoded (`..%252f..%252fetc/passwd`)
+  - ✅ Windows-style (`..\\..\\etc\\passwd`)
+  - ✅ Null byte injection (`/etc/passwd%00.html`)
+  - ✅ Attempts to access files outside htdocs directory
+- **Implementation**: `SecurityMiddleware::sanitize_path()` provides robust path validation
+  used by both HTTP/1.1 and HTTP/2 handlers
+
+**6. HTTP Request Smuggling Risk** 🔴 CRITICAL
+- **Location**: `src/http.cc` (Content-Length/Transfer-Encoding handling)
+- **Issue**: No validation of conflicting headers, insufficient chunked encoding validation
+- **Attack**: CL.TE or TE.CL desync attacks
+  ```http
+  POST / HTTP/1.1
+  Content-Length: 6
+  Content-Length: 5
+  Transfer-Encoding: chunked
+
+  0
+
+  GET /admin HTTP/1.1
+  ```
+- **Fix Required**:
+  - [ ] Reject requests with multiple Content-Length headers
+  - [ ] Reject requests with both Content-Length AND Transfer-Encoding
+  - [ ] Strict chunked encoding parser with size validation
+  - [ ] Normalize request before passing to backend
+  - [ ] Add integration tests for smuggling patterns
+
+#### PHASE 2: HIGH PRIORITY VULNERABILITIES
+
+**7. Slowloris / Slow Read Attacks** 🟠 HIGH
+- **Location**: Timeout handling throughout
+- **Issue**: Insufficient protection against slow HTTP attacks
+- **Current**: Basic timeouts exist but incomplete
+  ```cpp
+  static constexpr int KEEPALIVE_TIMEOUT_SEC = 5;
+  static constexpr int SSL_HANDSHAKE_TIMEOUT_SEC = 10;
+  ```
+- **Attacks**:
+  - Slowloris: Send partial headers, 1 byte every 10 seconds
+  - Slow POST: Send body at 1 byte/second
+  - Slow Read: Read response at 1 byte/minute
+- **Fix Required**:
+  - [ ] Implement per-stage timeouts:
+  ```cpp
+  static constexpr int READ_HEADER_TIMEOUT = 10;     // Initial headers
+  static constexpr int READ_BODY_TIMEOUT = 30;       // Body transfer
+  static constexpr int WRITE_TIMEOUT = 60;           // Response write
+  static constexpr int MIN_DATA_RATE = 1024;         // bytes/sec
+  ```
+  - [ ] Add bandwidth tracking per connection:
+  ```cpp
+  struct ConnectionState {
+      std::chrono::steady_clock::time_point last_activity;
+      size_t bytes_transferred;
+
+      bool is_too_slow() const {
+          auto elapsed = std::chrono::steady_clock::now() - last_activity;
+          auto seconds = std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
+          if (seconds == 0) return false;
+          return (bytes_transferred / seconds) < MIN_DATA_RATE;
+      }
+  };
+  ```
+
+**8. HTTP/2 Rapid Reset (CVE-2023-44487)** 🟠 HIGH
+- **Location**: `src/http2_server.cc` - No protection against rapid stream resets
+- **Attack**: Open streams, immediately RST them, repeat → CPU exhaustion
+- **Impact**: Achieved with minimal bandwidth (attacker advantage ~1000x)
+- **Fix Required**:
+  - [ ] Track reset rate per connection:
+  ```cpp
+  class Http2Session {
+      size_t reset_count_ = 0;
+      std::chrono::steady_clock::time_point reset_window_start_;
+      static constexpr size_t MAX_RESETS_PER_WINDOW = 100;
+      static constexpr int RESET_WINDOW_SECONDS = 10;
+
+      void on_stream_reset(int32_t stream_id) {
+          auto now = std::chrono::steady_clock::now();
+          if (now - reset_window_start_ > std::chrono::seconds(RESET_WINDOW_SECONDS)) {
+              reset_count_ = 0;
+              reset_window_start_ = now;
+          }
+
+          if (++reset_count_ > MAX_RESETS_PER_WINDOW) {
+              nghttp2_session_terminate_session(session_, NGHTTP2_ENHANCE_YOUR_CALM);
+          }
+      }
+  };
+  ```
+
+**9. HPACK Bomb Attack** 🟠 HIGH
+- **Location**: `src/http2_server.cc` - No limits on HPACK table size
+- **Attack**: Maliciously compressed headers that expand to gigabytes
+- **Example**: 100KB compressed → 10GB decompressed
+- **Fix Required**:
+  - [ ] Configure nghttp2 limits:
+  ```cpp
+  nghttp2_option* option;
+  nghttp2_option_new(&option);
+  nghttp2_option_set_max_deflate_dynamic_table_size(option, 4096);
+  nghttp2_option_set_max_header_list_size(option, 16384);
+  nghttp2_session_server_new2(&session_, callbacks, this, option);
+  nghttp2_option_del(option);
+  ```
+
+**10. Integer Overflow in File Size Handling** 🟠 HIGH
+- **Location**: `src/http.cc:204-206`, `src/http.cc:255-257`
+- **Issue**: `tellg()` returns `streampos` which could overflow
+- **Current Code**:
+  ```cpp
+  auto size = file.tellg();
+  std::vector<char> buffer(size);  // Potential huge allocation
+  ```
+- **Attack**: Symlink to /dev/zero or massive file → overflow → heap corruption
+- **Fix Required**:
+  - [ ] Add size validation:
+  ```cpp
+  auto size = file.tellg();
+  if (size < 0 || size > MAX_FILE_SIZE) {
+      throw std::runtime_error("File too large");
+  }
+  size_t safe_size = static_cast<size_t>(size);
+  if (safe_size > MAX_BODY_SIZE) {
+      ctx.status_code = 413;  // Payload Too Large
+      return;
+  }
+  std::vector<char> buffer(safe_size);
+  ```
+
+**11. Resource Exhaustion - File Descriptors** 🟠 HIGH
+- **Issue**: No limits on concurrent connections, open files, sockets per IP
+- **Attack**: Exhaust file descriptors → denial of service
+- **Fix Required**:
+  - [ ] Implement connection limits:
+  ```cpp
+  static constexpr int MAX_CONNECTIONS = 10000;
+  static constexpr int MAX_CONN_PER_IP = 100;
+  static constexpr int MAX_OPEN_FILES = 8192;
+
+  // Use rlimit to enforce
+  struct rlimit limit = {MAX_OPEN_FILES, MAX_OPEN_FILES};
+  setrlimit(RLIMIT_NOFILE, &limit);
+  ```
+  - [ ] Track connections per IP address
+  - [ ] Implement connection pool with priority queue
+
+#### PHASE 3: MEDIUM PRIORITY VULNERABILITIES
+
+**12. Insufficient Security Headers** 🟠 MEDIUM
+- **Location**: `src/security_middleware.cc:24-29`
+- **Missing Critical Headers**: CSP, HSTS, Permissions-Policy
+- **Fix Required**:
+  - [ ] Add comprehensive security headers:
+  ```cpp
+  ctx.response_headers["Content-Security-Policy"] =
+      "default-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'";
+  ctx.response_headers["Strict-Transport-Security"] =
+      "max-age=31536000; includeSubDomains; preload";
+  ctx.response_headers["Permissions-Policy"] =
+      "geolocation=(), microphone=(), camera=()";
+  ctx.response_headers["X-Permitted-Cross-Domain-Policies"] = "none";
+  ctx.response_headers["Cross-Origin-Embedder-Policy"] = "require-corp";
+  ctx.response_headers["Cross-Origin-Opener-Policy"] = "same-origin";
+  ctx.response_headers["Cross-Origin-Resource-Policy"] = "same-origin";
+  ```
+
+**13. No CSRF Protection** 🟠 MEDIUM
+- **Issue**: POST/PUT/DELETE can be triggered cross-origin
+- **Fix Required**:
+  - [ ] Implement CSRF token generation and validation
+  - [ ] Add SameSite cookie attribute
+  - [ ] Validate Origin/Referer headers for state-changing operations
+
+**14. Information Disclosure** 🟠 MEDIUM
+- **Location**: `src/http.cc:127`
+- **Issue**: Server version exposed in headers
+- **Current**: `Server: SHELOB/0.5 (Unix)`
+- **Fix Required**:
+  - [ ] Make server header configurable
+  - [ ] Default to generic value or omit entirely
+  - [ ] Remove stack traces from error messages
+  - [ ] Sanitize error responses to avoid path disclosure
+
+**15. Session Management Weaknesses** 🟠 MEDIUM
+- **Issue**: No session timeout, weak nonce generation, no session invalidation
+- **Fix Required**:
+  - [ ] Implement proper session management:
+  ```cpp
+  class SessionManager {
+      static constexpr int SESSION_TIMEOUT = 1800;  // 30 minutes
+      static constexpr int ABSOLUTE_TIMEOUT = 43200; // 12 hours
+
+      struct Session {
+          std::string id;
+          std::chrono::system_clock::time_point created;
+          std::chrono::system_clock::time_point last_access;
+          std::string user;
+          bool secure;
+      };
+
+      void invalidate_expired_sessions();
+      void rotate_session_id(const std::string& old_id);
+  };
+  ```
+  - [ ] Use cryptographically secure random for nonces (crypto_random_bytes)
+  - [ ] Enforce cookie security flags: Secure, HttpOnly, SameSite
+
+**16. Unvalidated Redirects** 🟠 MEDIUM
+- **Issue**: Open redirect enables phishing attacks
+- **Fix Required**:
+  - [ ] Validate redirect targets are relative or whitelisted
+  - [ ] Reject absolute URLs to external domains
+  ```cpp
+  bool is_safe_redirect(const std::string& url) {
+      if (url.empty() || url[0] == '/') return true;  // Relative
+      if (url.find("://") != std::string::npos) return false;  // Absolute
+      return true;
+  }
+  ```
+
+**17. Logging Security Issues** 🟠 MEDIUM
+- **Issues**: Logs may contain sensitive data, no rotation, log injection
+- **Fix Required**:
+  - [ ] Sanitize log entries (remove passwords, tokens, PII)
+  - [ ] Implement log rotation with size/time limits
+  - [ ] Escape newlines to prevent log injection
+  - [ ] Secure log file permissions (0600)
+
+**18. No Protection Against Decompression Bombs** 🟠 MEDIUM
+- **Location**: Compression middleware
+- **Attack**: Upload 42KB file that decompresses to 4.5PB
+- **Fix Required**:
+  - [ ] Limit decompression ratio
+  - [ ] Limit decompressed size
+  - [ ] Stream decompression with monitoring
+
+#### PHASE 4: ARCHITECTURAL IMPROVEMENTS
+
+**19. Defense in Depth Architecture**
+- [ ] Implement multi-layer security:
+```cpp
+class SecurityLayer {
+    IPFirewall firewall_;              // Layer 1: Network filtering
+    RateLimiter rate_limiter_;         // Layer 2: Rate limiting
+    InputValidator validator_;          // Layer 3: Input validation
+    AuthenticationMgr auth_;           // Layer 4: Authentication
+    AuthorizationMgr authz_;           // Layer 5: Authorization
+    AuditLogger audit_;                // Layer 6: Audit trail
+    IntrusionDetection ids_;           // Layer 7: Attack detection
+};
+```
+
+**20. Security Monitoring & Alerting**
+- [ ] Implement anomaly detection:
+```cpp
+class SecurityMonitor {
+    void detect_port_scanning(const std::string& ip);
+    void detect_brute_force(const std::string& ip);
+    void detect_sql_injection(const std::string& input);
+    void detect_xss_attempt(const std::string& input);
+    void detect_directory_traversal(const std::string& path);
+
+    void alert_suspicious_activity(const std::string& details);
+    void auto_block_attacker(const std::string& ip, int duration_sec);
+};
+```
+
+**21. Memory Safety Enhancements**
+- [ ] Enable sanitizers in debug builds:
+```meson
+if get_option('buildtype') == 'debug'
+  sanitizers = ['-fsanitize=address', '-fsanitize=undefined',
+                '-fsanitize=leak', '-fno-omit-frame-pointer']
+  add_project_arguments(sanitizers, language: 'cpp')
+  add_project_link_arguments(sanitizers, language: 'cpp')
+endif
+```
+
+**22. Fuzzing Infrastructure**
+- [ ] Integrate AFL++ or libFuzzer
+- [ ] Fuzz critical parsers:
+  - HTTP header parser
+  - Chunked encoding parser
+  - Range header parser
+  - Multipart form parser
+  - URL decoder
+  - Cookie parser
+
+**23. Security Testing Suite**
+- [ ] OWASP ZAP automated scanning
+- [ ] Burp Suite professional testing
+- [ ] Custom exploit scripts for each CVE
+- [ ] Integration with CI/CD pipeline
+
+#### IMPLEMENTATION PRIORITY
+
+**Completed**:
+1. ✅ Path traversal protection with proper canonicalization (2025-11-22)
+
+**Week 1 (Critical)**:
+1. Fix plaintext password storage → hashed passwords
+2. Fix timing attacks → constant-time comparison
+3. Add request size limits everywhere
+4. Add comprehensive input validation
+
+**Weeks 2-4 (High)**:
+1. HTTP request smuggling protections
+2. Slowloris/slow read protections
+3. HTTP/2 rapid reset protection
+4. HPACK bomb protection
+5. Integer overflow fixes
+6. Enhanced security headers
+
+**Months 2-3 (Medium)**:
+1. Proper session management
+2. CSRF protection
+3. Per-IP rate limiting
+4. Security monitoring and alerting
+5. Audit logging
+6. Intrusion detection
+
+**Months 3-6 (Long-term)**:
+1. External security audit
+2. Penetration testing
+3. Continuous fuzzing integration
+4. Security compliance certification
+5. Formal threat modeling
+6. Security documentation
+
+#### TESTING & VALIDATION
+
+- [ ] Create security test suite with attack simulations
+- [ ] Automated vulnerability scanning in CI/CD
+- [ ] Regular penetration testing schedule
+- [ ] Bug bounty program consideration
+- [ ] Compliance testing (OWASP Top 10, CWE Top 25)
+
+#### REFERENCES
+
+- OWASP Top 10 (2021): https://owasp.org/Top10/
+- CWE Top 25: https://cwe.mitre.org/top25/
+- CVE-2023-44487 (HTTP/2 Rapid Reset)
+- RFC 7616 (HTTP Digest Authentication with SHA-256)
+- NIST Password Guidelines (SP 800-63B)
+
+---
+
+### Performance Enhancements
 - [ ] **Memory pool allocator** - Reduce allocation overhead
 - [ ] **Performance benchmarking suite** - Automated performance testing
+- [ ] **Zero-copy optimizations** - Reduce memory copies in hot paths
+- [ ] **Connection pooling improvements** - Better connection reuse
 
 ### Configuration & Management
 - [ ] **Configuration File System** - YAML/TOML config file support
