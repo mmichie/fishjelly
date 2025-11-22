@@ -2,6 +2,7 @@
 #include "compression_middleware.h"
 #include "footer_middleware.h"
 #include "logging_middleware.h"
+#include "request_limits.h"
 #include "security_middleware.h"
 #include <algorithm>
 #include <arpa/inet.h>
@@ -555,14 +556,14 @@ void Http::processPostRequest(const std::map<std::string, std::string>& headerma
         }
 
         // Check for negative or excessively large content length
-        const int MAX_POST_SIZE = 10 * 1024 * 1024; // 10MB max
-        if (content_length < 0 || content_length > MAX_POST_SIZE) {
+        if (content_length < 0 || content_length > static_cast<int>(RequestLimits::MAX_BODY_SIZE)) {
             if (DEBUG) {
                 std::cout << "Invalid Content-Length: " << content_length << std::endl;
             }
             if (sock) {
                 sendHeader(413, 0, "text/html", keep_alive);
-                sock->write_line("<html><body>413 Request Entity Too Large</body></html>");
+                sock->write_line("<html><body>413 Payload Too Large - Request body exceeds size "
+                                 "limit</body></html>");
             }
             return;
         }
@@ -728,8 +729,11 @@ void Http::processPutRequest(const std::map<std::string, std::string>& headermap
 
         // Read the request body
         int content_length = std::stoi(content_length_it->second);
-        if (content_length < 0 || content_length > 10 * 1024 * 1024) { // 10MB limit
-            sendHeader(413, 0, "text/plain", keep_alive);
+        if (content_length < 0 ||
+            content_length > static_cast<int>(RequestLimits::MAX_UPLOAD_SIZE)) {
+            sendHeader(413, 0, "text/html", keep_alive);
+            sock->write_line("<html><body>413 Payload Too Large - Upload exceeds size "
+                             "limit</body></html>");
             return;
         }
 
@@ -892,6 +896,29 @@ std::string Http::readChunkedBody() {
                 }
             }
             break;
+        }
+
+        // Check individual chunk size limit
+        if (chunk_size > RequestLimits::MAX_CHUNK_SIZE) {
+            if (DEBUG) {
+                std::cout << "Chunk too large: " << chunk_size << " bytes" << std::endl;
+            }
+            sendHeader(413, 0, "text/html");
+            sock->write_line(
+                "<html><body>413 Payload Too Large - Chunk exceeds size limit</body></html>");
+            return "";
+        }
+
+        // Check total body size limit
+        if (body.length() + chunk_size > RequestLimits::MAX_BODY_SIZE) {
+            if (DEBUG) {
+                std::cout << "Total chunked body too large: " << (body.length() + chunk_size)
+                          << " bytes" << std::endl;
+            }
+            sendHeader(413, 0, "text/html");
+            sock->write_line("<html><body>413 Payload Too Large - Request body exceeds size "
+                             "limit</body></html>");
+            return "";
         }
 
         // Read chunk data
@@ -1711,6 +1738,7 @@ std::string Http::getHeader(bool use_timeout) {
 
     std::string clientBuffer;
     std::string line;
+    size_t header_count = 0;
 
     // Timeouts are handled at the ASIO connection level
     // (use_timeout parameter is ignored in ASIO mode)
@@ -1723,11 +1751,49 @@ std::string Http::getHeader(bool use_timeout) {
         if (DEBUG) {
             std::cout << "DEBUG getHeader: Read line [" << line << "]" << std::endl;
         }
+
+        // Check individual line size limit
+        if (line.length() > RequestLimits::MAX_HEADER_LINE) {
+            if (DEBUG) {
+                std::cout << "Header line too large: " << line.length() << " bytes" << std::endl;
+            }
+            sendHeader(413, 0, "text/html");
+            sock->write_line("<html><body>413 Payload Too Large - Header line exceeds size "
+                             "limit</body></html>");
+            return "";
+        }
+
         clientBuffer += line;
+
+        // Check total header size limit
+        if (clientBuffer.length() > RequestLimits::MAX_HEADER_SIZE) {
+            if (DEBUG) {
+                std::cout << "Total headers too large: " << clientBuffer.length() << " bytes"
+                          << std::endl;
+            }
+            sendHeader(413, 0, "text/html");
+            sock->write_line(
+                "<html><body>413 Payload Too Large - Headers exceed size limit</body></html>");
+            return "";
+        }
 
         // Check for end of headers (empty line)
         if (line == "\n" || line == "\r\n") {
             break;
+        }
+
+        // Count headers (lines with colons are headers)
+        if (line.find(':') != std::string::npos) {
+            header_count++;
+            if (header_count > RequestLimits::MAX_HEADERS_COUNT) {
+                if (DEBUG) {
+                    std::cout << "Too many headers: " << header_count << std::endl;
+                }
+                sendHeader(413, 0, "text/html");
+                sock->write_line(
+                    "<html><body>413 Payload Too Large - Too many headers</body></html>");
+                return "";
+            }
         }
 
         // Also check if we've accumulated the end pattern

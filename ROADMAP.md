@@ -210,34 +210,26 @@ Now that all planned phases are complete, here are additional features that coul
   - [ ] Consider deprecating Digest auth in favor of modern OAuth2/JWT
   - [ ] Update to RFC 7616 (Digest with SHA-256)
 
-**4. No Request Size Limits** 🔴 CRITICAL
-- **Location**: Throughout `src/http.cc`, `src/http2_server.cc`
+**4. No Request Size Limits** ✅ FIXED
+- **Location**: `src/request_limits.h`, `src/http.cc`, `src/http2_server.cc`
 - **Issue**: Unlimited header/body/upload sizes enable memory exhaustion DoS
-- **Attack Examples**:
-  ```bash
-  # Exhaust memory with giant headers
-  curl -H "X-Evil: $(python3 -c 'print("A"*1000000000)')" http://target/
-
-  # HTTP/2 stream flooding
-  # Open 10,000 concurrent streams requesting 1GB files each
-  ```
-- **Fix Required**:
-  - [ ] Add size limits to http.h:
-  ```cpp
-  static constexpr size_t MAX_HEADER_SIZE = 8192;        // 8KB
-  static constexpr size_t MAX_BODY_SIZE = 10485760;      // 10MB
-  static constexpr size_t MAX_REQUEST_LINE = 8192;       // 8KB
-  static constexpr size_t MAX_UPLOAD_SIZE = 104857600;   // 100MB
-  static constexpr size_t MAX_HEADERS_COUNT = 100;       // Max header fields
-  ```
-  - [ ] Add HTTP/2 specific limits:
-  ```cpp
-  static constexpr int MAX_STREAMS_PER_CONN = 100;
-  static constexpr size_t MAX_FRAME_SIZE = 16384;        // Per RFC 7540
-  static constexpr size_t MAX_HEADER_LIST_SIZE = 16384;
-  ```
-  - [ ] Enforce limits during parsing with early termination
-  - [ ] Return 413 Payload Too Large when exceeded
+- **Solution Implemented**:
+  - ✅ Created centralized size limit constants in `src/request_limits.h`
+  - ✅ HTTP/1.1 limits enforced:
+    - Header size limits (8KB per line, 8KB total)
+    - Header count limit (100 headers max)
+    - POST body size limit (10MB)
+    - PUT upload size limit (100MB)
+    - Chunked transfer encoding limits (1MB per chunk, 10MB total)
+  - ✅ HTTP/2 limits enforced:
+    - Header name/value size limits (256B/8KB)
+    - Total header list size (16KB)
+    - Header count limit (100 headers)
+    - Request body size limit (10MB)
+    - SETTINGS frame configures client-side limits
+  - ✅ Returns 413 Payload Too Large when limits exceeded
+  - ✅ Test suite created (`scripts/testing/test_request_size_limits.py`)
+- **Security Impact**: Prevents memory exhaustion DoS attacks via oversized requests
 
 **5. Path Traversal Vulnerabilities** ✅ FIXED
 - **Location**: `src/security_middleware.cc`, `src/http2_server.cc`
@@ -552,6 +544,7 @@ endif
 
 **Completed**:
 1. ✅ Path traversal protection with proper canonicalization (2025-11-22)
+2. ✅ Request size limits to prevent memory exhaustion DoS (2025-11-22)
 
 **Week 1 (Critical)**:
 1. Fix plaintext password storage → hashed passwords

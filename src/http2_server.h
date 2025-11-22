@@ -76,8 +76,10 @@ class Http2Session {
         std::string scheme;
         std::map<std::string, std::string> headers;
         std::vector<uint8_t> request_body;
-        std::string response_body; // Store response body
-        size_t bytes_sent = 0;     // Track bytes sent
+        std::string response_body;    // Store response body
+        size_t bytes_sent = 0;        // Track bytes sent
+        size_t header_count = 0;      // Track number of headers
+        size_t total_header_size = 0; // Track total header size (names + values)
     };
 
     std::map<int32_t, StreamData> streams_;

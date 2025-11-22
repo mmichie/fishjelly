@@ -4,6 +4,7 @@
 
 #include "log.h"
 #include "mime.h"
+#include "request_limits.h"
 #include "security_middleware.h"
 #include <boost/asio/use_awaitable.hpp>
 #include <cstring>
@@ -104,6 +105,29 @@ int Http2Session::on_header_callback(nghttp2_session* session, const nghttp2_fra
 
     auto& stream = self->streams_[stream_id];
 
+    // Check individual header name size limit
+    if (namelen > RequestLimits::MAX_HEADER_NAME_SIZE) {
+        std::cerr << "Header name too large: " << namelen << " bytes" << std::endl;
+        nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE, stream_id, NGHTTP2_ENHANCE_YOUR_CALM);
+        return 0;
+    }
+
+    // Check individual header value size limit
+    if (valuelen > RequestLimits::MAX_HEADER_VALUE_SIZE) {
+        std::cerr << "Header value too large: " << valuelen << " bytes" << std::endl;
+        nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE, stream_id, NGHTTP2_ENHANCE_YOUR_CALM);
+        return 0;
+    }
+
+    // Update total header size
+    stream.total_header_size += namelen + valuelen;
+    if (stream.total_header_size > RequestLimits::MAX_HEADER_LIST_SIZE) {
+        std::cerr << "Total header size too large: " << stream.total_header_size << " bytes"
+                  << std::endl;
+        nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE, stream_id, NGHTTP2_ENHANCE_YOUR_CALM);
+        return 0;
+    }
+
     // Handle HTTP/2 pseudo-headers
     if (header_name == ":method") {
         stream.method = header_value;
@@ -114,6 +138,15 @@ int Http2Session::on_header_callback(nghttp2_session* session, const nghttp2_fra
     } else if (header_name == ":scheme") {
         stream.scheme = header_value;
     } else {
+        // Count regular headers (pseudo-headers don't count toward limit)
+        stream.header_count++;
+        if (stream.header_count > RequestLimits::MAX_HEADERS_COUNT) {
+            std::cerr << "Too many headers: " << stream.header_count << std::endl;
+            nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE, stream_id,
+                                      NGHTTP2_ENHANCE_YOUR_CALM);
+            return 0;
+        }
+
         // Regular header
         stream.headers[header_name] = header_value;
     }
@@ -143,7 +176,6 @@ int Http2Session::on_begin_headers_callback(nghttp2_session* session, const nght
 int Http2Session::on_data_chunk_recv_callback(nghttp2_session* session, uint8_t flags,
                                               int32_t stream_id, const uint8_t* data, size_t len,
                                               void* user_data) {
-    (void)session;
     (void)flags;
 
     auto* self = static_cast<Http2Session*>(user_data);
@@ -151,6 +183,16 @@ int Http2Session::on_data_chunk_recv_callback(nghttp2_session* session, uint8_t 
     // Append data to stream's request body
     auto it = self->streams_.find(stream_id);
     if (it != self->streams_.end()) {
+        // Check if adding this data would exceed the body size limit
+        if (it->second.request_body.size() + len > RequestLimits::MAX_BODY_SIZE) {
+            std::cerr << "Request body too large: " << (it->second.request_body.size() + len)
+                      << " bytes" << std::endl;
+            // Reset stream with ENHANCE_YOUR_CALM error code
+            nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE, stream_id,
+                                      NGHTTP2_ENHANCE_YOUR_CALM);
+            return 0;
+        }
+
         it->second.request_body.insert(it->second.request_body.end(), data, data + len);
     }
 
@@ -327,8 +369,15 @@ asio::awaitable<void> Http2Session::start() {
 
         nghttp2_session_callbacks_del(callbacks);
 
-        // Send initial SETTINGS frame
-        nghttp2_settings_entry settings[] = {{NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, 100}};
+        // Send initial SETTINGS frame with comprehensive limits
+        // These settings inform the client of our limits
+        nghttp2_settings_entry settings[] = {
+            // Limit concurrent streams to prevent resource exhaustion
+            {NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, RequestLimits::MAX_STREAMS_PER_CONN},
+            // Set max frame size (RFC 7540 initial value is 16384)
+            {NGHTTP2_SETTINGS_MAX_FRAME_SIZE, RequestLimits::MAX_FRAME_SIZE},
+            // Set max header list size to prevent header DoS
+            {NGHTTP2_SETTINGS_MAX_HEADER_LIST_SIZE, RequestLimits::MAX_HEADER_LIST_SIZE}};
 
         nghttp2_submit_settings(session_, NGHTTP2_FLAG_NONE, settings,
                                 sizeof(settings) / sizeof(settings[0]));
