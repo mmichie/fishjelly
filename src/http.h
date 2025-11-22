@@ -101,6 +101,31 @@ class Http {
     // Authentication
     Auth auth;
 
+    // Rate limiting
+    // Note: In fork-per-connection mode, each child process has its own rate_limit_map_,
+    // so rate limiting is less effective for parallel requests from the same IP.
+    // Rate limiting works best with:
+    // 1. Sequential requests (typical browser behavior)
+    // 2. Worker pool mode where workers share state within a process
+    // For distributed/shared rate limiting, consider using Redis or similar
+    struct RateLimitInfo {
+        std::vector<time_t> request_times;
+        time_t blocked_until = 0; // Time when client will be unblocked
+    };
+    std::map<std::string, RateLimitInfo> rate_limit_map_;
+    int rate_limit_max_requests_ = 100;  // Max requests per window
+    int rate_limit_window_seconds_ = 60; // Time window in seconds
+    int rate_limit_block_seconds_ = 60;  // How long to block after limit exceeded
+    bool rate_limiting_enabled_ = false; // Disabled by default, opt-in
+
+    // Maintenance mode
+    bool maintenance_mode_ = false;
+    std::string maintenance_message_ = "Server is temporarily unavailable for maintenance";
+
+    // Rate limiting methods
+    bool checkRateLimit(const std::string& client_ip, bool keep_alive);
+    void cleanupRateLimitMap();
+
   public:
     Http(); // Constructor to initialize middleware
 
@@ -121,6 +146,16 @@ class Http {
 
     // Set up default middleware chain
     void setupDefaultMiddleware();
+
+    // Rate limiting configuration
+    void setRateLimitEnabled(bool enabled) { rate_limiting_enabled_ = enabled; }
+    void setRateLimitMaxRequests(int max_requests) { rate_limit_max_requests_ = max_requests; }
+    void setRateLimitWindow(int seconds) { rate_limit_window_seconds_ = seconds; }
+    void setRateLimitBlockDuration(int seconds) { rate_limit_block_seconds_ = seconds; }
+
+    // Maintenance mode configuration
+    void setMaintenanceMode(bool enabled) { maintenance_mode_ = enabled; }
+    void setMaintenanceMessage(const std::string& message) { maintenance_message_ = message; }
 
     std::unique_ptr<Socket> sock;
 };

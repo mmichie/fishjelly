@@ -3,6 +3,7 @@
 #include "footer_middleware.h"
 #include "logging_middleware.h"
 #include "security_middleware.h"
+#include <algorithm>
 #include <array>
 #include <cctype>
 #include <chrono>
@@ -505,6 +506,42 @@ bool Http::parseHeader(std::string_view header) {
                 "<html><body>400 Bad Request - HTTP/1.1 requires Host header</body></html>");
         }
         return false;
+    }
+
+    // Check maintenance mode first
+    if (maintenance_mode_) {
+        if (sock) {
+            std::vector<std::string> extra_headers;
+            extra_headers.push_back("Retry-After: 3600"); // Retry in 1 hour by default
+
+            std::string error_msg = "<html><head><title>503 Service Unavailable</title></head>"
+                                    "<body><h1>503 Service Unavailable</h1>"
+                                    "<p>" +
+                                    maintenance_message_ + "</p></body></html>";
+
+            sendHeader(503, error_msg.length(), "text/html", false, extra_headers);
+            sock->write_line(error_msg);
+        }
+        return false;
+    }
+
+    // Check rate limiting
+    if (sock) {
+        std::string client_ip = inet_ntoa(sock->client.sin_addr);
+        bool keep_alive_temp = (http_version == "HTTP/1.0")
+                                   ? (headermap["Connection"] == "keep-alive")
+                                   : (headermap["Connection"] != "close");
+
+        if (!checkRateLimit(client_ip, keep_alive_temp)) {
+            return false; // Rate limit exceeded, response already sent
+        }
+
+        // Periodically cleanup rate limit map (every 100th request)
+        static int cleanup_counter = 0;
+        if (++cleanup_counter >= 100) {
+            cleanupRateLimitMap();
+            cleanup_counter = 0;
+        }
     }
 
     // Handle Connection header based on HTTP version
@@ -1888,8 +1925,17 @@ void Http::sendHeader(int code, int size, std::string_view file_type, bool keep_
     case 413:
         headerStream << "HTTP/1.1 413 Request Entity Too Large\r\n";
         break;
+    case 405:
+        headerStream << "HTTP/1.1 405 Method Not Allowed\r\n";
+        break;
+    case 429:
+        headerStream << "HTTP/1.1 429 Too Many Requests\r\n";
+        break;
     case 501:
         headerStream << "HTTP/1.1 501 Not Implemented\r\n";
+        break;
+    case 503:
+        headerStream << "HTTP/1.1 503 Service Unavailable\r\n";
         break;
     case 505:
         headerStream << "HTTP/1.1 505 HTTP Version Not Supported\r\n";
@@ -2074,6 +2120,107 @@ bool Http::checkAuthentication(const std::string& path, const std::string& metho
     }
 
     return true; // Authentication passed
+}
+
+/**
+ * Check rate limit for a client IP
+ * Returns true if request is allowed, false if rate limit exceeded
+ * Sends 429 response if limit exceeded
+ */
+bool Http::checkRateLimit(const std::string& client_ip, bool keep_alive) {
+    if (!rate_limiting_enabled_) {
+        return true; // Rate limiting disabled
+    }
+
+    time_t now = time(nullptr);
+    auto& limit_info = rate_limit_map_[client_ip];
+
+    // Check if client is currently blocked
+    if (limit_info.blocked_until > now) {
+        // Client is blocked - send 429 with Retry-After header
+        int retry_after = limit_info.blocked_until - now;
+        std::vector<std::string> extra_headers;
+        extra_headers.push_back("Retry-After: " + std::to_string(retry_after));
+
+        std::string error_msg = "<html><head><title>429 Too Many Requests</title></head>"
+                                "<body><h1>429 Too Many Requests</h1>"
+                                "<p>You have exceeded the rate limit. Please try again in " +
+                                std::to_string(retry_after) + " seconds.</p></body></html>";
+
+        sendHeader(429, error_msg.length(), "text/html", keep_alive, extra_headers);
+        if (sock) {
+            sock->write_line(error_msg);
+        }
+        return false;
+    }
+
+    // Remove old timestamps outside the window
+    time_t window_start = now - rate_limit_window_seconds_;
+    limit_info.request_times.erase(
+        std::remove_if(limit_info.request_times.begin(), limit_info.request_times.end(),
+                       [window_start](time_t t) { return t < window_start; }),
+        limit_info.request_times.end());
+
+    // Check if limit exceeded
+    if (static_cast<int>(limit_info.request_times.size()) >= rate_limit_max_requests_) {
+        // Rate limit exceeded - block the client
+        limit_info.blocked_until = now + rate_limit_block_seconds_;
+
+        int retry_after = rate_limit_block_seconds_;
+        std::vector<std::string> extra_headers;
+        extra_headers.push_back("Retry-After: " + std::to_string(retry_after));
+
+        std::string error_msg = "<html><head><title>429 Too Many Requests</title></head>"
+                                "<body><h1>429 Too Many Requests</h1>"
+                                "<p>You have exceeded the rate limit of " +
+                                std::to_string(rate_limit_max_requests_) + " requests per " +
+                                std::to_string(rate_limit_window_seconds_) +
+                                " seconds. Please try again in " + std::to_string(retry_after) +
+                                " seconds.</p></body></html>";
+
+        sendHeader(429, error_msg.length(), "text/html", keep_alive, extra_headers);
+        if (sock) {
+            sock->write_line(error_msg);
+        }
+
+        // Log the rate limit violation
+        if (DEBUG) {
+            std::cout << "Rate limit exceeded for IP: " << client_ip << std::endl;
+        }
+
+        return false;
+    }
+
+    // Add current request timestamp
+    limit_info.request_times.push_back(now);
+
+    return true; // Request allowed
+}
+
+/**
+ * Cleanup old entries from rate limit map to prevent memory growth
+ * Should be called periodically
+ */
+void Http::cleanupRateLimitMap() {
+    time_t now = time(nullptr);
+    time_t cleanup_threshold = now - (rate_limit_window_seconds_ * 2);
+
+    for (auto it = rate_limit_map_.begin(); it != rate_limit_map_.end();) {
+        auto& limit_info = it->second;
+
+        // Remove old timestamps
+        limit_info.request_times.erase(
+            std::remove_if(limit_info.request_times.begin(), limit_info.request_times.end(),
+                           [cleanup_threshold](time_t t) { return t < cleanup_threshold; }),
+            limit_info.request_times.end());
+
+        // Remove entry if it's empty and client is not blocked
+        if (limit_info.request_times.empty() && limit_info.blocked_until <= now) {
+            it = rate_limit_map_.erase(it);
+        } else {
+            ++it;
+        }
+    }
 }
 
 /**
