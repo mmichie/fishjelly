@@ -39,13 +39,21 @@ lib_sources = files(
   'asio_ssl_server.h',
   'asio_ssl_server.cc',
   'websocket_handler.h',
-  'websocket_handler.cc'
+  'websocket_handler.cc',
+  'http2_server.h',
+  'http2_server.cc'
 )
+
+# Build dependency list
+deps = [boost_dep, openssl_dep]
+if nghttp2_dep.found()
+  deps += [nghttp2_dep]
+endif
 
 # Create static library for testing
 fishjelly_lib = static_library('fishjelly',
   lib_sources,
-  dependencies : [boost_dep, openssl_dep],
+  dependencies : deps,
   cpp_args : [
     '-DGIT_HASH="' + git_hash + '"',
     '-fstack-protector-strong',
@@ -65,7 +73,7 @@ executable('shelob',
   'webserver.cc',
   'webserver.h',
   link_with : fishjelly_lib,
-  dependencies : [boost_dep, openssl_dep],
+  dependencies : deps,
   include_directories : inc,
   cpp_args : [
     '-DGIT_HASH="' + git_hash + '"',
@@ -85,7 +93,7 @@ install_man('fishjelly.1')
 executable('middleware_demo',
   'middleware_demo.cc',
   link_with : fishjelly_lib,
-  dependencies : [boost_dep, openssl_dep],
+  dependencies : deps,
   include_directories : inc,
   cpp_args : [
     '-DGIT_HASH="' + git_hash + '"',

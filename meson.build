@@ -23,6 +23,19 @@ boost_dep = dependency('boost',
 # Find OpenSSL for authentication (MD5 hashing)
 openssl_dep = dependency('openssl', required : true)
 
+# Find nghttp2 for HTTP/2 support (optional)
+# Using the C library directly since nghttp2-asio is deprecated
+nghttp2_dep = dependency('libnghttp2',
+  required : false
+)
+
+if nghttp2_dep.found()
+  add_project_arguments('-DHAVE_NGHTTP2', language : 'cpp')
+  message('HTTP/2 support enabled via libnghttp2 C library')
+else
+  warning('libnghttp2 not found, HTTP/2 support will not be available')
+endif
+
 # Get git hash for embedding
 git = find_program('git', required : false)
 if git.found()

@@ -2,6 +2,9 @@
 #include "asio_server.h"
 #include "asio_ssl_server.h"
 #include "ssl_context.h"
+#ifdef HAVE_NGHTTP2
+#include "http2_server.h"
+#endif
 #include <argparse.hpp>
 #include <csignal>
 #include <filesystem>
@@ -102,6 +105,7 @@ struct CommandLineArgs {
     int port;             // HTTP port
     bool daemon;          // Run as daemon
     bool use_ssl;         // Enable SSL/TLS
+    bool use_http2;       // Enable HTTP/2
     int ssl_port;         // HTTPS port (default: 443)
     std::string ssl_cert; // Path to SSL certificate
     std::string ssl_key;  // Path to SSL private key
@@ -126,6 +130,11 @@ CommandLineArgs parseCommandLineOptions(int argc, char* argv[]) {
         .implicit_value(true);
 
     program.add_argument("--ssl").help("enable SSL/TLS").default_value(false).implicit_value(true);
+
+    program.add_argument("--http2")
+        .help("enable HTTP/2 (requires SSL)")
+        .default_value(false)
+        .implicit_value(true);
 
     program.add_argument("--ssl-port")
         .help("SSL port to listen on")
@@ -161,6 +170,7 @@ CommandLineArgs parseCommandLineOptions(int argc, char* argv[]) {
     return {.port = program.get<int>("--port"),
             .daemon = program.get<bool>("--daemon"),
             .use_ssl = program.get<bool>("--ssl"),
+            .use_http2 = program.get<bool>("--http2"),
             .ssl_port = program.get<int>("--ssl-port"),
             .ssl_cert = program.get<std::string>("--ssl-cert"),
             .ssl_key = program.get<std::string>("--ssl-key"),
@@ -212,8 +222,34 @@ int main(int argc, char* argv[]) {
 
     createPidFile("fishjelly.pid", pid);
 
-    if (args.use_ssl) {
-        // HTTPS server (ASIO SSL)
+    // Check for HTTP/2 requirements
+    if (args.use_http2) {
+#ifndef HAVE_NGHTTP2
+        std::cerr << "Error: HTTP/2 support not available. Rebuild with nghttp2-asio library."
+                  << std::endl;
+        return 1;
+#else
+        if (!args.use_ssl) {
+            std::cerr << "Warning: HTTP/2 typically requires SSL. Use --ssl with --http2."
+                      << std::endl;
+            std::cerr << "Attempting to run HTTP/2 in cleartext mode (h2c)..." << std::endl;
+        }
+
+        try {
+            Http2Server server(args.use_ssl ? args.ssl_port : args.port, args.use_ssl,
+                               args.ssl_cert, args.ssl_key);
+            server.run();
+        } catch (const std::exception& e) {
+            std::cerr << "HTTP/2 Error: " << e.what() << std::endl;
+            if (args.use_ssl) {
+                std::cerr << "\nTo generate test certificates, run:" << std::endl;
+                std::cerr << "  scripts/generate-ssl-cert.sh" << std::endl;
+            }
+            return 1;
+        }
+#endif
+    } else if (args.use_ssl) {
+        // HTTPS server (ASIO SSL) - HTTP/1.1
         try {
             SSLContext ssl_context;
             ssl_context.load_certificate(args.ssl_cert);
@@ -233,7 +269,7 @@ int main(int argc, char* argv[]) {
             return 1;
         }
     } else {
-        // HTTP server (ASIO)
+        // HTTP server (ASIO) - HTTP/1.1
         AsioServer server(args.port);
         server.run();
     }

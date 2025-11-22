@@ -30,11 +30,23 @@ meson compile
 
 # Run the server (example on port 8080)
 ./shelob -p 8080
+
+# Run with HTTP/2 support (requires SSL and nghttp2)
+./shelob --ssl --http2 --ssl-port 8443
 ```
 
 ## Architecture Overview
 
-Fishjelly is a lightweight HTTP web server written in C++23 using Boost.ASIO for async I/O with coroutines. The codebase follows object-oriented design principles with clear separation of concerns.
+Fishjelly is a lightweight HTTP/HTTP/2 web server written in C++23 using Boost.ASIO for async I/O with coroutines. The codebase follows object-oriented design principles with clear separation of concerns.
+
+### HTTP/2 Support
+
+HTTP/2 support is implemented using the nghttp2 C library with custom ASIO integration:
+- **Protocol**: HTTP/2 over TLS (h2) with ALPN negotiation
+- **Features**: Binary framing, HPACK header compression, stream multiplexing
+- **Implementation**: Uses nghttp2 C library integrated with Boost.ASIO coroutines
+- **Usage**: `./shelob --ssl --http2 --ssl-port 8443`
+- **Testing**: `curl --http2 -k https://localhost:8443/`
 
 ### Core Components
 
@@ -48,11 +60,13 @@ Fishjelly is a lightweight HTTP web server written in C++23 using Boost.ASIO for
 
 5. **WebSocketHandler (websocket_handler.h/cc)**: Handles WebSocket connections using Boost.Beast. Detects HTTP Upgrade requests and manages WebSocket sessions with echo functionality.
 
-6. **Webserver (webserver.h/cc)**: Application entry point handling command-line parsing, daemon mode, signal management (SIGINT), and PID file operations.
+6. **Http2Server / Http2Session (http2_server.h/cc)**: HTTP/2 server implementation using nghttp2 C library. Handles ALPN negotiation, binary framing, HPACK compression, and stream multiplexing with ASIO coroutines.
+
+7. **Webserver (webserver.h/cc)**: Application entry point handling command-line parsing, daemon mode, signal management (SIGINT), and PID file operations. Supports HTTP/1.1, HTTPS, and HTTP/2 modes.
 
 ### Component Relationships
 
-- `Webserver` creates either `AsioServer` or `AsioSSLServer` based on SSL option
+- `Webserver` creates either `AsioServer`, `AsioSSLServer`, or `Http2Server` based on command-line options
 - Server accepts connections and spawns coroutines to handle each request
 - Each connection creates an `AsioSocketAdapter` implementing the `Socket` interface
 - `Http` instance processes requests using the `Socket` interface
