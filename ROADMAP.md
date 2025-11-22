@@ -59,7 +59,14 @@
   - [x] 405 Method Not Allowed (required for HTTP/1.1 compliance)
   - [x] 429 Too Many Requests (rate limiting with configurable limits, Retry-After header)
   - [x] 503 Service Unavailable (maintenance mode with configurable message)
-- [ ] Add SSL/TLS support using ASIO SSL
+- [x] Add SSL/TLS support using ASIO SSL - **Completed! ✓**
+  - [x] SSLContext wrapper with security hardening
+  - [x] TLS 1.2 and 1.3 support (old protocols disabled)
+  - [x] Mozilla "Intermediate" cipher configuration (ECDHE, AES-GCM, ChaCha20-Poly1305)
+  - [x] Session caching and DH parameters support
+  - [x] AsioSSLServer with async SSL handshakes and timeout handling
+  - [x] Self-signed certificate generation script for testing
+  - [x] Command-line options (--ssl, --ssl-port, --ssl-cert, --ssl-key)
 - [ ] WebSocket support
 - [ ] HTTP/2 support
 
