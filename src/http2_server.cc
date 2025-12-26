@@ -436,9 +436,20 @@ asio::awaitable<void> Http2Session::start() {
         nghttp2_session_callbacks_set_on_data_chunk_recv_callback(callbacks,
                                                                   on_data_chunk_recv_callback);
 
-        // Create server session
-        nghttp2_session_server_new(&session_, callbacks, this);
+        // Create nghttp2 options for HPACK bomb protection
+        nghttp2_option* option;
+        nghttp2_option_new(&option);
 
+        // Limit the HPACK encoder's dynamic table size to prevent memory exhaustion
+        // This protects against HPACK bomb attacks where maliciously compressed
+        // headers expand to gigabytes of memory
+        nghttp2_option_set_max_deflate_dynamic_table_size(option,
+                                                          RequestLimits::MAX_HPACK_TABLE_SIZE);
+
+        // Create server session with options
+        nghttp2_session_server_new2(&session_, callbacks, this, option);
+
+        nghttp2_option_del(option);
         nghttp2_session_callbacks_del(callbacks);
 
         // Send initial SETTINGS frame with comprehensive limits
@@ -449,7 +460,10 @@ asio::awaitable<void> Http2Session::start() {
             // Set max frame size (RFC 7540 initial value is 16384)
             {NGHTTP2_SETTINGS_MAX_FRAME_SIZE, RequestLimits::MAX_FRAME_SIZE},
             // Set max header list size to prevent header DoS
-            {NGHTTP2_SETTINGS_MAX_HEADER_LIST_SIZE, RequestLimits::MAX_HEADER_LIST_SIZE}};
+            {NGHTTP2_SETTINGS_MAX_HEADER_LIST_SIZE, RequestLimits::MAX_HEADER_LIST_SIZE},
+            // Limit HPACK dynamic table size to prevent HPACK bomb attacks
+            // This tells the client how large our decoder table is
+            {NGHTTP2_SETTINGS_HEADER_TABLE_SIZE, RequestLimits::MAX_HPACK_TABLE_SIZE}};
 
         nghttp2_submit_settings(session_, NGHTTP2_FLAG_NONE, settings,
                                 sizeof(settings) / sizeof(settings[0]));

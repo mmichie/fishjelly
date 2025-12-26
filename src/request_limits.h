@@ -34,6 +34,11 @@ constexpr size_t MAX_HEADER_LIST_SIZE = 16384; // 16KB max total header size
 constexpr size_t MAX_HEADER_NAME_SIZE = 256;   // 256 bytes per header name
 constexpr size_t MAX_HEADER_VALUE_SIZE = 8192; // 8KB per header value
 
+// HPACK dynamic table size limits (protection against HPACK bomb attacks)
+// RFC 7540 default is 4096 bytes; we use the same to prevent memory exhaustion
+// from maliciously crafted compressed headers that expand to huge sizes
+constexpr size_t MAX_HPACK_TABLE_SIZE = 4096; // 4KB HPACK dynamic table
+
 } // namespace RequestLimits
 
 #endif /* !SHELOB_REQUEST_LIMITS_H */
