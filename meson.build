@@ -64,23 +64,28 @@ clang_tidy = find_program('clang-tidy', required : false)
 if clang_tidy.found()
   # Get all source files
   source_files = files(
-    'src/socket.cc',
-    'src/http.cc',
-    'src/filter.cc',
-    'src/log.cc',
-    'src/mime.cc',
-    'src/token.cc',
-    'src/cgi.cc',
-    'src/webserver.cc',
-    'src/asio_server.cc',
     'src/asio_http_connection.cc',
+    'src/asio_server.cc',
     'src/asio_socket_adapter.cc',
-    'src/footer_middleware.cc',
-    'src/logging_middleware.cc',
-    'src/security_middleware.cc',
+    'src/asio_ssl_server.cc',
+    'src/auth.cc',
+    'src/cgi.cc',
     'src/compression_middleware.cc',
+    'src/config.cc',
     'src/content_negotiator.cc',
-    'src/auth.cc'
+    'src/filter.cc',
+    'src/footer_middleware.cc',
+    'src/http.cc',
+    'src/http2_server.cc',
+    'src/log.cc',
+    'src/logging_middleware.cc',
+    'src/middleware_demo.cc',
+    'src/mime.cc',
+    'src/security_middleware.cc',
+    'src/ssl_context.cc',
+    'src/token.cc',
+    'src/webserver.cc',
+    'src/websocket_handler.cc'
   )
   
   # Add clang-tidy target
