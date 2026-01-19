@@ -27,6 +27,10 @@ constexpr size_t MAX_BODY_SIZE = 10485760;    // 10MB request body
 constexpr size_t MAX_UPLOAD_SIZE = 104857600; // 100MB for file uploads (PUT)
 constexpr size_t MAX_CHUNK_SIZE = 1048576;    // 1MB per chunk in chunked encoding
 
+// File size limits (protection against integer overflow and memory exhaustion)
+// When serving files, we must validate the size before allocating buffers
+constexpr size_t MAX_FILE_SIZE = 1073741824;  // 1GB max file size for serving
+
 // HTTP/2 Specific Limits (per RFC 7540 recommendations)
 constexpr int MAX_STREAMS_PER_CONN = 100;      // Maximum concurrent streams
 constexpr size_t MAX_FRAME_SIZE = 16384;       // 16KB max frame size (RFC 7540 default)

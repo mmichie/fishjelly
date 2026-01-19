@@ -17,6 +17,46 @@
 #include <sstream>
 #include <sys/stat.h>
 
+namespace {
+
+/**
+ * Safely get file size with overflow protection.
+ * Returns the file size on success, or -1 on error.
+ *
+ * This function protects against:
+ * - tellg() returning -1 on error
+ * - Files larger than MAX_FILE_SIZE (prevents memory exhaustion)
+ * - Integer overflow when converting streampos to size_t
+ * - Symlinks to device files like /dev/zero
+ */
+long long getFileSizeSafe(std::ifstream& file) {
+    file.seekg(0, std::ios::end);
+    auto pos = file.tellg();
+    file.seekg(0, std::ios::beg);
+
+    // Check for tellg() error
+    if (pos == std::streampos(-1)) {
+        return -1;
+    }
+
+    // Convert to long long for comparison
+    auto size = static_cast<long long>(pos);
+
+    // Check for negative size (shouldn't happen, but be defensive)
+    if (size < 0) {
+        return -1;
+    }
+
+    // Check against maximum allowed file size
+    if (static_cast<size_t>(size) > RequestLimits::MAX_FILE_SIZE) {
+        return -1;
+    }
+
+    return size;
+}
+
+} // anonymous namespace
+
 /**
  * Constructor - Initialize without middleware by default
  */
@@ -203,13 +243,15 @@ void Http::sendFile(std::string_view filename) {
     std::filesystem::path filepath(filename);
     std::string file_extension = filepath.extension().string();
 
-    // Determine File Size
-    file.seekg(0, std::ios::end);
-    auto size = file.tellg();
-    file.seekg(0, std::ios::beg);
+    // Determine file size with overflow protection
+    auto size = getFileSizeSafe(file);
+    if (size < 0) {
+        std::cerr << "Error: file too large or invalid: " << filename << std::endl;
+        return;
+    }
 
     // Read entire file into vector
-    std::vector<char> buffer(size);
+    std::vector<char> buffer(static_cast<size_t>(size));
     if (!file.read(buffer.data(), size)) {
         std::cerr << "Error reading file!" << std::endl;
         return;
@@ -254,24 +296,27 @@ void Http::sendFileWithMiddleware(std::string_view filename, const std::string& 
             "<html><head><title>404</title></head><body>404 not found</body></html>";
         ctx.content_type = "text/html";
     } else {
-        // Determine File Size
-        file.seekg(0, std::ios::end);
-        auto size = file.tellg();
-        file.seekg(0, std::ios::beg);
-
-        // Read entire file
-        std::vector<char> buffer(size);
-        if (!file.read(buffer.data(), size)) {
-            ctx.status_code = 500;
-            ctx.response_body = "<html><body>500 Internal Server Error</body></html>";
+        // Determine file size with overflow protection
+        auto size = getFileSizeSafe(file);
+        if (size < 0) {
+            ctx.status_code = 413;
+            ctx.response_body = "<html><body>413 Payload Too Large - File exceeds size limit</body></html>";
             ctx.content_type = "text/html";
         } else {
-            ctx.status_code = 200;
-            ctx.response_body = std::string(buffer.begin(), buffer.end());
+            // Read entire file
+            std::vector<char> buffer(static_cast<size_t>(size));
+            if (!file.read(buffer.data(), size)) {
+                ctx.status_code = 500;
+                ctx.response_body = "<html><body>500 Internal Server Error</body></html>";
+                ctx.content_type = "text/html";
+            } else {
+                ctx.status_code = 200;
+                ctx.response_body = std::string(buffer.begin(), buffer.end());
 
-            // Determine content type
-            Mime& mime = Mime::getInstance();
-            ctx.content_type = mime.getMimeFromExtension(filename);
+                // Determine content type
+                Mime& mime = Mime::getInstance();
+                ctx.content_type = mime.getMimeFromExtension(filename);
+            }
         }
     }
 
@@ -1384,9 +1429,13 @@ void Http::processHeadRequest(const std::map<std::string, std::string>& headerma
         }
     }
 
-    // Determine File Size
-    file.seekg(0, std::ios::end);
-    auto size = file.tellg();
+    // Determine file size with validation
+    auto size = getFileSizeSafe(file);
+    if (size < 0) {
+        sendHeader(413, 0, "text/html", keep_alive);
+        sock->write_line("<html><body>413 Payload Too Large - File exceeds size limit</body></html>");
+        return;
+    }
 
     // Get MIME type
     Mime& mime = Mime::getInstance();
@@ -1702,10 +1751,13 @@ void Http::processGetRequest(const std::map<std::string, std::string>& headermap
         }
     }
 
-    // Determine File Size
-    file.seekg(0, std::ios::end);
-    auto size = file.tellg();
-    file.seekg(0, std::ios::beg);
+    // Determine file size with validation
+    auto size = getFileSizeSafe(file);
+    if (size < 0) {
+        sendHeader(413, 0, "text/html", keep_alive);
+        sock->write_line("<html><body>413 Payload Too Large - File exceeds size limit</body></html>");
+        return;
+    }
 
     // CGI support disabled - requires fork-based socket with file descriptor
     // The ASIO-based architecture doesn't expose raw file descriptors
