@@ -14,6 +14,9 @@ bd.sock
 db.sqlite
 bd.db
 
+# Local version tracking (machine-specific)
+.local_version
+
 # Keep JSONL exports and config (source of truth for git)
 !*.jsonl
-!config.json
+!metadata.json
