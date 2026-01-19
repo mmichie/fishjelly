@@ -16,6 +16,7 @@ bd.db
 
 # Local version tracking (machine-specific)
 .local_version
+last-touched
 
 # Keep JSONL exports and config (source of truth for git)
 !*.jsonl
